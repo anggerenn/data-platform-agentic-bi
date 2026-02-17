@@ -44,22 +44,29 @@ services:
       PREFECT_API_URL: "http://prefect-server:4200/api"
       ANALYTICS_DB_PATH: "/data/analytics.duckdb"
       ANALYTICS_PIPELINES_DIR: "/data/pipelines"
-      EVIDENCE_DIR: "/opt/prefect/evidence"
+      EVIDENCE_DIR: "/data/evidence"
     volumes:
-      - ./dbt:/opt/prefect/dbt
-      - ./prefect:/opt/prefect/flows
-      - ./evidence:/opt/prefect/evidence
       - /data:/data
     networks:
       - data-network
     restart: unless-stopped
-  
+
   evidence:
     image: node:18-alpine
-    working_dir: /app
-    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 3000"
+    working_dir: /data/evidence
+    command: >
+      sh -c "
+        apk add --no-cache git &&
+        if [ ! -f /data/evidence/package.json ]; then
+          git clone https://github.com/anggerenn/data-platform.git /tmp/repo &&
+          cp -r /tmp/repo/evidence/. /data/evidence/
+        else
+          cd /data/evidence && git pull
+        fi &&
+        npm install &&
+        npm run dev -- --host 0.0.0.0 --port 3000
+      "
     volumes:
-      - ./evidence:/app
       - /data:/data
     networks:
       - data-network
