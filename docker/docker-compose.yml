@@ -44,27 +44,29 @@ services:
       PREFECT_API_URL: "http://prefect-server:4200/api"
       ANALYTICS_DB_PATH: "/data/analytics.duckdb"
       ANALYTICS_PIPELINES_DIR: "/data/pipelines"
+      EVIDENCE_DIR: "/opt/prefect/evidence"
     volumes:
       - ./dbt:/opt/prefect/dbt
       - ./prefect:/opt/prefect/flows
       - ./evidence:/opt/prefect/evidence
       - /data:/data
-      - evidence_build:/opt/prefect/evidence/.evidence/template/static
     networks:
       - data-network
     restart: unless-stopped
   
-  nginx:
-    image: nginx:alpine
+  evidence:
+    image: node:18-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 3000"
     volumes:
-      - evidence_build:/usr/share/nginx/html
+      - ./evidence:/app
+      - /data:/data
     networks:
       - data-network
     restart: unless-stopped
 
 volumes:
   postgres_data:
-  evidence_build:
 
 networks:
   data-network:

@@ -9,10 +9,6 @@ RUN apt-get update && apt-get install -y curl && \
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install -r /tmp/requirements.txt
 
-# Install Evidence dependencies 
-COPY evidence/package.json evidence/package-lock.json /tmp/evidence/
-RUN cd /tmp/evidence && npm install
-
 WORKDIR /opt/prefect
 
 # Register deployment then start worker
