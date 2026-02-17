@@ -8,7 +8,7 @@ services:
       POSTGRES_DB: prefect
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     networks:
       - data-network
     restart: unless-stopped
