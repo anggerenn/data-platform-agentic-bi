@@ -40,7 +40,6 @@ services:
         sleep 30 &&
         prefect worker start --pool default-pool
       "
-    command: prefect worker start --pool default-pool
     volumes:
       - ./dbt:/opt/prefect/dbt
       - ./prefect:/opt/prefect/flows
