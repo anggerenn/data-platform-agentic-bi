@@ -10,7 +10,10 @@ COPY requirements.txt /tmp/requirements.txt
 RUN pip install -r /tmp/requirements.txt
 
 # Install Evidence dependencies
-COPY evidence/package.json evidence/package-lock.json /tmp/evidence/package.json
+COPY evidence/package.json evidence/package-lock.json /tmp/evidence/
 RUN cd /tmp/evidence && npm install
 
 WORKDIR /opt/prefect
+
+# Register deployment then start worker
+CMD ["bash", "-c", "prefect deploy --all -n analytics-pipeline && prefect worker start --pool default-pool"]

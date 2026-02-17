@@ -19,6 +19,12 @@ services:
     environment:
       PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://prefect:${POSTGRES_PASSWORD:-prefect}@postgres:5432/prefect
       PREFECT_SERVER_API_HOST: 0.0.0.0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4200/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     command: prefect server start
     networks:
       - data-network
@@ -28,18 +34,14 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.prefect
+    exclude_from_hc: true
     depends_on:
-      - prefect-server
+      prefect-server:
+        condition: service_healthy
     environment:
       PREFECT_API_URL: "http://prefect-server:4200/api"
       ANALYTICS_DB_PATH: "/data/analytics.duckdb"
       ANALYTICS_PIPELINES_DIR: "/data/pipelines"
-    command: >
-      bash -c "
-        echo 'Waiting for prefect-server...' &&
-        sleep 30 &&
-        prefect worker start --pool default-pool
-      "
     volumes:
       - ./dbt:/opt/prefect/dbt
       - ./prefect:/opt/prefect/flows
