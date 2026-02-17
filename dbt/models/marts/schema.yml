@@ -1,0 +1,26 @@
+version: 2
+
+models:
+  - name: daily_sales
+    description: "Aggregated daily sales by date, category and city"
+    columns:
+      - name: order_date
+        description: "Date of the order"
+        tests:
+          - not_null
+      - name: category
+        description: "Product category"
+        tests:
+          - not_null
+      - name: city
+        description: "City of the order"
+      - name: order_count
+        description: "Number of distinct orders"
+      - name: customer_count
+        description: "Number of distinct customers"
+      - name: units_sold
+        description: "Total units sold"
+      - name: revenue
+        description: "Sum of order amounts"
+      - name: total_revenue
+        description: "Sum of amount * quantity"

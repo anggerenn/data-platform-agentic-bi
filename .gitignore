@@ -25,6 +25,14 @@ dbt_packages/
 # dlt
 .dlt/
 
+# Evidence
+.evidence
+.svelte-kit
+evidence/build
+evidence/sources/analytics/analytics.duckdb
+evidence/static/data
+*.options.yaml
+
 # IDE
 .vscode/
 .idea/
@@ -35,3 +43,6 @@ dbt_packages/
 .DS_Store
 Thumbs.db
 node_modules/
+
+# npm
+.npmrc

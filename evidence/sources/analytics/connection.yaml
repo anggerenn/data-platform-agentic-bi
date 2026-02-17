@@ -1,0 +1,4 @@
+name: analytics
+type: duckdb
+options:
+  filename: /data/analytics.duckdb

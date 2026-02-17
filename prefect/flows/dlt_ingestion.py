@@ -27,8 +27,8 @@ def generate_orders():
             'quantity': random.randint(1, 5)
         }
         orders.append(order)
-    
     yield orders
+
 
 @dlt.resource(name="customers")
 def generate_customers():
@@ -43,13 +43,12 @@ def generate_customers():
             'signup_date': (datetime.now() - timedelta(days=random.randint(0, 365))).date().isoformat()
         }
         customers.append(customer)
-    
     yield customers
 
-@task(retries=2, retry_delay_seconds=30)
-def run_dlt_pipeline():
-    base_dir = "/Users/agha.syaifullah/Documents/data-platform-data"
 
+@task(retries=2, retry_delay_seconds=30)
+def run_dlt():
+    """Run dlt ingestion pipeline"""
     pipeline = dlt.pipeline(
         pipeline_name='analytics',
         dataset_name='raw',
@@ -59,14 +58,5 @@ def run_dlt_pipeline():
         pipelines_dir=os.environ["ANALYTICS_PIPELINES_DIR"]
     )
     load_info = pipeline.run([generate_orders(), generate_customers()])
-    
-    print(f"pipelines_dir: {pipeline.pipelines_dir}")
-    print(f"working_dir: {pipeline.working_dir}")
-    print(f"initial_cwd: {pipeline.initial_cwd}")
-    print(f"config: {pipeline.config}")
-
-    print(f"Load complete: {load_info}")
+    print(f"dlt load complete: {load_info}")
     return load_info
-
-if __name__ == "__main__":
-    run_dlt_pipeline()

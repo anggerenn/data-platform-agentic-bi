@@ -1,7 +1,0 @@
-FROM lightdash/lightdash:latest
-
-# Copy dbt project dan dashboard definitions
-COPY dbt /usr/app/dbt
-COPY lightdash /usr/app/dashboards
-
-WORKDIR /usr/app

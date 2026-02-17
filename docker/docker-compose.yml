@@ -8,7 +8,6 @@ services:
       POSTGRES_DB: prefect
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     networks:
       - data-network
     restart: unless-stopped
@@ -39,13 +38,24 @@ services:
     volumes:
       - ./dbt:/opt/prefect/dbt
       - ./prefect:/opt/prefect/flows
+      - ./evidence:/opt/prefect/evidence
       - /data:/data
+      - evidence_build:/opt/prefect/evidence/.evidence/template/static
+    networks:
+      - data-network
+    restart: unless-stopped
+  
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - evidence_build:/usr/share/nginx/html
     networks:
       - data-network
     restart: unless-stopped
 
 volumes:
   postgres_data:
+  evidence_build:
 
 networks:
   data-network:
