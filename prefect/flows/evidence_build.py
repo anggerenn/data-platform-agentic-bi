@@ -2,21 +2,22 @@ from prefect import task
 import subprocess
 import os
 
-@task(retries=2, retry_delay_seconds=30)
-def run_dbt():
-    """Run dbt transformations"""
-    dbt_dir = os.path.abspath(
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "dbt")
+@task(retries=1, retry_delay_seconds=10)
+def build_evidence():
+    """Build Evidence static site"""
+    evidence_dir = os.path.abspath(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "evidence")
     )
 
     result = subprocess.run(
-        ["dbt", "run", "--project-dir", dbt_dir, "--profiles-dir", dbt_dir],
+        ["npm", "run", "build"],
+        cwd=evidence_dir,
         capture_output=True,
         text=True
     )
     print(result.stdout)
     if result.returncode != 0:
         print(result.stderr)
-        raise Exception(f"dbt run failed: {result.stderr}")
-    print("dbt run complete")
+        raise Exception(f"Evidence build failed: {result.stderr}")
+    print("Evidence build complete")
     return True
