@@ -56,14 +56,13 @@ services:
     working_dir: /data/evidence
     command: >
       sh -c "
-        apk add --no-cache git &&
+        apk add --no-cache git python3 make g++ &&
         if [ ! -f /data/evidence/package.json ]; then
           git clone https://github.com/anggerenn/data-platform.git /tmp/repo &&
           cp -r /tmp/repo/evidence/. /data/evidence/
-        else
-          cd /data/evidence && git pull
         fi &&
         npm install &&
+        npm rebuild sqlite3 &&
         npm run dev -- --host 0.0.0.0 --port 3000
       "
     volumes:
