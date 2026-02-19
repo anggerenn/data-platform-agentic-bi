@@ -20,7 +20,8 @@
     "@evidence-dev/duckdb": "^2.0.1",
     "@evidence-dev/evidence": "^40.1.8",
     "@sveltejs/vite-plugin-svelte": "^3.0.0",
-    "apache-arrow": "^14.0.0"
+    "apache-arrow": "^14.0.0",
+    "git-remote-origin-url": "^4.0.0"
   },
   "overrides": {
     "jsonwebtoken": "9.0.0",
