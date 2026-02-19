@@ -48,6 +48,7 @@ services:
       EVIDENCE_DIR: "/data/evidence"
     volumes:
       - /data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - data-network
     restart: unless-stopped
