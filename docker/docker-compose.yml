@@ -52,23 +52,14 @@ services:
       - data-network
     restart: unless-stopped
 
-  metabase:
+  evidence:
     build:
       context: .
-      dockerfile: docker/Dockerfile.metabase
-    environment:
-      MB_DB_TYPE: postgres
-      MB_DB_DBNAME: metabase
-      MB_DB_PORT: 5432
-      MB_DB_USER: prefect
-      MB_DB_PASS: ${POSTGRES_PASSWORD:-prefect}
-      MB_DB_HOST: postgres
+      dockerfile: docker/Dockerfile.evidence
     volumes:
-      - /data:/data
+      - /data:/data          # access to DuckDB file
     networks:
       - data-network
-    depends_on:
-      - postgres
     restart: unless-stopped
 
 volumes:

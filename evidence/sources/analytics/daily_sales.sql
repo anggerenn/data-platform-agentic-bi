@@ -1,0 +1,1 @@
+select * from transformed_marts.daily_sales limit 10
