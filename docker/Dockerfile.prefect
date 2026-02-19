@@ -1,5 +1,6 @@
 FROM prefecthq/prefect:3.4.25-python3.12
 
+# Install Node.js 20 for Evidence rebuild task
 RUN apt-get update && apt-get install -y curl && \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y nodejs && \
