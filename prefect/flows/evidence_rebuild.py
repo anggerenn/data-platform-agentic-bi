@@ -5,7 +5,7 @@ from prefect import task
 def rebuild_evidence():
     # Get the evidence container ID dynamically by label
     find_container = subprocess.run(
-        "docker ps --filter 'name=evidence' --format '{{.Names}}' | head -1",
+        "docker ps --filter 'name=evidence' --filter 'status=running' --format '{{.Names}}' | grep -v '^evidence$' | head -1"
         shell=True,
         capture_output=True,
         text=True
