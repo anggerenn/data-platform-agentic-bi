@@ -6,7 +6,7 @@ COPY ./evidence/package.json .
 
 RUN rm -f package-lock.json
 
-ENV NODE_OPTIONS=--max-old-space-size=512
+ENV NODE_OPTIONS=--max-old-space-size=900
 RUN npm install --no-audit --no-fund --legacy-peer-deps
 RUN npm rebuild sqlite3
 RUN npm install -g serve
