@@ -53,9 +53,9 @@ def run_dlt():
         pipeline_name='analytics',
         dataset_name='raw',
         destination=dlt.destinations.duckdb(
-            credentials=os.environ["ANALYTICS_DB_PATH"]
+            credentials=os.path.expanduser(os.environ["ANALYTICS_DB_PATH"])
         ),
-        pipelines_dir=os.environ["ANALYTICS_PIPELINES_DIR"]
+        pipelines_dir=os.path.expanduser(os.environ["ANALYTICS_PIPELINES_DIR"])
     )
     load_info = pipeline.run([generate_orders(), generate_customers()])
     print(f"dlt load complete: {load_info}")
