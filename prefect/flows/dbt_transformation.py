@@ -9,14 +9,15 @@ def run_dbt():
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "dbt")
     )
 
-    result = subprocess.run(
-        ["dbt", "run", "--project-dir", dbt_dir, "--profiles-dir", dbt_dir],
-        capture_output=True,
-        text=True
-    )
-    print(result.stdout)
-    if result.returncode != 0:
-        print(result.stderr)
-        raise Exception(f"dbt run failed: {result.stderr}")
-    print("dbt run complete")
+    for cmd in [["dbt", "run"], ["dbt", "docs", "generate"]]:
+        result = subprocess.run(
+            cmd + ["--project-dir", dbt_dir, "--profiles-dir", dbt_dir],
+            capture_output=True,
+            text=True
+        )
+        print(result.stdout)
+        if result.returncode != 0:
+            print(result.stderr)
+            raise Exception(f"{cmd[1]} failed: {result.stderr}")
+    print("dbt run complete + docs generate complete")
     return True
