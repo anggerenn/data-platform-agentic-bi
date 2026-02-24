@@ -7,7 +7,7 @@ client = OpenAI(
     base_url=DEEPSEEK_BASE_URL,
 )
 
-SYSTEM_PROMPT = """You are a data analyst assistant. You have access to the following database schema:
+SQL_SYSTEM_PROMPT = """You are a data analyst assistant. You have access to the following database schema:
 
 {schema}
 
@@ -21,28 +21,50 @@ Rules:
 - Do not use INSERT, UPDATE, DELETE, or DROP statements
 """
 
-def clean_sql(sql: str) -> str:
-    sql = sql.strip()
-    if sql.startswith("```"):
-        sql = sql.split("\n", 1)[-1]  # remove first line (```sql)
-        sql = sql.rsplit("```", 1)[0]  # remove closing ```
-    return sql.strip()
+INTENT_SYSTEM_PROMPT = (
+    "You are an intent classifier. "
+    "Classify the user's message as either 'dashboard' or 'explore'. "
+    "Return 'dashboard' only if the user explicitly wants to save, create, or persist a dashboard. "
+    "Return 'explore' if they just want to see or explore data. "
+    "Reply with a single word: dashboard or explore."
+)
 
-def generate_sql(question: str) -> str:
-    schema = load_schema_context()
+
+def _chat_completion(system: str, user: str) -> str:
     response = client.chat.completions.create(
         model=DEEPSEEK_MODEL,
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT.format(schema=schema)},
-            {"role": "user", "content": question},
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
         ],
         temperature=0,
     )
-    raw = response.choices[0].message.content.strip()
+    return response.choices[0].message.content.strip()
+
+
+def clean_sql(sql: str) -> str:
+    sql = sql.strip()
+    if sql.startswith("```"):
+        sql = sql.split("\n", 1)[-1]
+        sql = sql.rsplit("```", 1)[0]
+    return sql.strip()
+
+
+def generate_sql(question: str) -> str:
+    schema = load_schema_context()
+    raw = _chat_completion(SQL_SYSTEM_PROMPT.format(schema=schema), question)
     return clean_sql(raw)
 
 
+def classify_intent(message: str) -> str:
+    result = _chat_completion(INTENT_SYSTEM_PROMPT, message)
+    return "dashboard" if "dashboard" in result.lower() else "explore"
+
+
 if __name__ == "__main__":
-    question = "What are the top 5 cities by total revenue?"
-    sql = generate_sql(question)
-    print(sql)
+    print("--- generate_sql ---")
+    print(generate_sql("What are the top 5 cities by total revenue?"))
+
+    print("\n--- classify_intent ---")
+    print(classify_intent("Create a dashboard for top cities by revenue"))
+    print(classify_intent("What are the top 5 cities by total revenue?"))
