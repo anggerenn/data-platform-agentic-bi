@@ -16,6 +16,8 @@ Rules:
 - Return ONLY the SQL query, no explanation, no markdown, no backticks
 - Always use fully qualified table names (schema.table)
 - Only use tables and columns listed in the schema above
+- Prefer [CANONICAL] tables for all business questions
+- Only use [STAGING] tables if the user explicitly asks about raw or unaggregated data
 - Do not use INSERT, UPDATE, DELETE, or DROP statements
 """
 

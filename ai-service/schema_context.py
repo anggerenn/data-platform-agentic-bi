@@ -3,16 +3,13 @@ import os
 from config import MANIFEST_PATH
 
 def load_schema_context() -> str:
-    """
-    Parses dbt manifest.json and returns a compact schema string
-    suitable for injecting into an LLM prompt as context.
-    """
     manifest_path = os.path.abspath(os.path.join(os.path.dirname(__file__), MANIFEST_PATH))
-    
+
     with open(manifest_path, "r") as f:
         manifest = json.load(f)
 
-    lines = []
+    canonical_lines = []
+    staging_lines = []
     nodes = manifest.get("nodes", {})
 
     for node_id, node in nodes.items():
@@ -23,8 +20,11 @@ def load_schema_context() -> str:
         schema = node.get("schema", "")
         description = node.get("description", "")
         columns = node.get("columns", {})
+        is_canonical = node.get("config", {}).get("meta", {}).get("canonical", False)
 
-        lines.append(f"Table: {schema}.{model_name}")
+        lines = []
+        label = "[CANONICAL] " if is_canonical else "[STAGING] "
+        lines.append(f"Table: {label}{schema}.{model_name}")
         if description:
             lines.append(f"  Description: {description}")
 
@@ -38,9 +38,16 @@ def load_schema_context() -> str:
                 col_line += f": {col_desc}"
             lines.append(col_line)
 
-        lines.append("")  # blank line between tables
+        lines.append("")
 
-    return "\n".join(lines)
+        if is_canonical:
+            canonical_lines.extend(lines)
+        else:
+            staging_lines.extend(lines)
+
+    # Canonical tables first, staging after
+    all_lines = canonical_lines + staging_lines
+    return "\n".join(all_lines)
 
 
 if __name__ == "__main__":
