@@ -2,6 +2,8 @@ version: 2
 
 models:
   - name: daily_sales
+    meta:
+      canonical: true
     description: "Aggregated daily sales by date, category and city"
     columns:
       - name: order_date

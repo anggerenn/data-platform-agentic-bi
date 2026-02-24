@@ -1,5 +1,7 @@
 models:
   - name: stg_orders
+    meta:
+      canonical: false
     description: "Staged orders from raw ingestion"
     columns:
       - name: order_id
