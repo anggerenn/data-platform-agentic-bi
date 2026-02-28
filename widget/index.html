@@ -514,9 +514,9 @@ document.getElementById('superset-frame').src = SUPERSET_URL;
 const chartRegistry = new Map();
 
 // ─── CONVERSATION HISTORY ─────────────────────────────────
-// Tracks user message count for the 20-message limit
 const MAX_MESSAGES = 20;
 let messageCount = 0;
+const conversationHistory = []; // {role: 'user'|'assistant', content: string}
 
 // ─── PANEL TOGGLE ─────────────────────────────────────────
 function togglePanel() {
@@ -586,6 +586,9 @@ async function sendMessage() {
 
   messageCount++;
 
+  // Record user message in history
+  conversationHistory.push({ role: 'user', content: query });
+
   appendMessage('user', query);
 
   // Show warning at message 19 (1 remaining after this)
@@ -605,7 +608,10 @@ async function sendMessage() {
     const res = await fetch(`${API_BASE_URL}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({
+        query,
+        history: conversationHistory.slice(-20), // send last 20 turns
+      }),
     });
 
     removeElement(thinkingId);
@@ -614,7 +620,13 @@ async function sendMessage() {
       const errText = await res.text();
       appendError(`Server error ${res.status}: ${errText}`);
     } else {
-      renderResult(await res.json());
+      const data = await res.json();
+      // Record assistant reply in history so LLM has context next turn
+      conversationHistory.push({
+        role: 'assistant',
+        content: `SQL executed: ${data.sql || ''}\nReturned ${data.results?.length || 0} rows.`,
+      });
+      renderResult(data);
     }
   } catch (err) {
     removeElement(thinkingId);
@@ -669,7 +681,7 @@ function renderResult(data) {
   const cardEl = document.createElement('div');
   cardEl.className = 'result-card';
 
-// Badge
+  // Badge
   const badge = document.createElement('div');
   badge.className = `intent-badge ${intent === 'dashboard' ? 'intent-dashboard' : 'intent-explore'}`;
   badge.innerHTML = intent === 'dashboard' ? '⬡ &nbsp;dashboard created' : '⬡ &nbsp;explore';

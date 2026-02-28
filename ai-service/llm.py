@@ -1,6 +1,8 @@
 from openai import OpenAI
 from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
 from schema_context import load_schema_context
+from typing import Optional
+
 
 client = OpenAI(
     api_key=DEEPSEEK_API_KEY,
@@ -23,6 +25,7 @@ Rules:
 - For date formatting use DuckDB syntax: strftime('%Y-%m', TRY_CAST(column AS DATE))
 - For year/month filtering use: YEAR(TRY_CAST(column AS DATE)) or MONTH(TRY_CAST(column AS DATE))
 - If the question cannot be answered from the schema, return exactly: SELECT 'I could not find relevant data for that question.' AS message
+- Use conversation history to understand follow-up questions and references like 'that', 'same', 'those cities', 'now filter by', etc.
 """
 
 INTENT_SYSTEM_PROMPT = (
@@ -54,10 +57,27 @@ def clean_sql(sql: str) -> str:
     return sql.strip()
 
 
-def generate_sql(question: str) -> str:
+def generate_sql(question: str, history: Optional[list[dict]] = None) -> str:
     schema = load_schema_context()
-    raw = _chat_completion(SQL_SYSTEM_PROMPT.format(schema=schema), question)
-    return clean_sql(raw)
+    messages = [{"role": "system", "content": SQL_SYSTEM_PROMPT.format(schema=schema)}]
+
+    # Inject last 10 turns of conversation history for follow-up understanding
+    if history:
+        for turn in history[-10:]:
+            role = turn.get("role", "user")
+            content = turn.get("content", "")
+            # Only include valid roles
+            if role in ("user", "assistant") and content:
+                messages.append({"role": role, "content": content})
+
+    messages.append({"role": "user", "content": question})
+
+    response = client.chat.completions.create(
+        model=DEEPSEEK_MODEL,
+        messages=messages,
+        temperature=0,
+    )
+    return clean_sql(response.choices[0].message.content.strip())
 
 
 def classify_intent(message: str) -> str:
