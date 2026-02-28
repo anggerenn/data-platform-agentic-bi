@@ -448,8 +448,8 @@
 
 <!-- ─── CONFIG — edit these two lines ──────────────────── -->
 <script>
-    const SUPERSET_URL = 'http://localhost:8088';
-    const API_BASE_URL = 'http://localhost:8001';
+  const SUPERSET_URL = 'http://localhost:8088';  // ← your Superset URL
+  const API_BASE_URL = 'http://localhost:8001';  // ← your FastAPI URL
 </script>
 
 <!-- ─── SUPERSET FULLSCREEN IFRAME ─────────────────────── -->
@@ -513,6 +513,11 @@ document.getElementById('superset-frame').src = SUPERSET_URL;
 // ─── CHART REGISTRY ───────────────────────────────────────
 const chartRegistry = new Map();
 
+// ─── CONVERSATION HISTORY ─────────────────────────────────
+// Tracks user message count for the 20-message limit
+const MAX_MESSAGES = 20;
+let messageCount = 0;
+
 // ─── PANEL TOGGLE ─────────────────────────────────────────
 function togglePanel() {
   const panel   = document.getElementById('chat-panel');
@@ -536,12 +541,41 @@ function sendHint(el) {
   sendMessage();
 }
 
+// ─── LIMIT WARNING BANNER ─────────────────────────────────
+function appendLimitWarning(remaining) {
+  const existing = document.getElementById('limit-warning');
+  if (existing) existing.remove();
+
+  const banner = document.createElement('div');
+  banner.id = 'limit-warning';
+  banner.style.cssText = `
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent);
+    background: #e8ff470d;
+    border: 1px solid var(--accent);
+    padding: 7px 10px;
+    text-align: center;
+    letter-spacing: 0.05em;
+    animation: fadeIn 200ms ease;
+  `;
+  banner.textContent = remaining === 1
+    ? '⚠  This is your last message. Refresh to start a new session.'
+    : `⚠  ${remaining} message${remaining !== 1 ? 's' : ''} remaining in this session.`;
+
+  document.getElementById('messages').appendChild(banner);
+  scrollToBottom();
+}
+
 // ─── SEND MESSAGE ─────────────────────────────────────────
 async function sendMessage() {
   const input   = document.getElementById('chat-input');
   const sendBtn = document.getElementById('send-btn');
   const query   = input.value.trim();
   if (!query) return;
+
+  // Hard limit reached — block sending
+  if (messageCount >= MAX_MESSAGES) return;
 
   input.value = '';
   input.style.height = 'auto';
@@ -550,7 +584,20 @@ async function sendMessage() {
   const emptyState = document.getElementById('empty-state');
   if (emptyState) emptyState.remove();
 
+  messageCount++;
+
   appendMessage('user', query);
+
+  // Show warning at message 19 (1 remaining after this)
+  if (messageCount === MAX_MESSAGES - 1) {
+    appendLimitWarning(1);
+  } else if (messageCount === MAX_MESSAGES) {
+    // Disable input permanently
+    input.disabled = true;
+    input.placeholder = 'Session limit reached. Refresh to start over.';
+    sendBtn.disabled = true;
+  }
+
   const thinkingId = 'thinking-' + Date.now();
   appendThinking(thinkingId);
 
@@ -573,9 +620,21 @@ async function sendMessage() {
     removeElement(thinkingId);
     appendError(`Could not reach API: ${err.message}`);
   } finally {
-    sendBtn.disabled = false;
+    if (messageCount < MAX_MESSAGES) sendBtn.disabled = false;
     input.focus();
   }
+}
+
+// ─── FALLBACK DETECTION ───────────────────────────────────
+function isFallbackResult(results, columns) {
+  // Detect the "could not find relevant data" fallback row from LLM
+  if (results.length === 1 && columns.length === 1 && columns[0] === 'message') {
+    const val = String(Object.values(results[0])[0] || '').toLowerCase();
+    if (val.includes('could not find') || val.includes('no relevant') || val.includes('cannot answer')) {
+      return Object.values(results[0])[0];
+    }
+  }
+  return null;
 }
 
 // ─── RENDER RESULT ────────────────────────────────────────
@@ -592,16 +651,44 @@ function renderResult(data) {
   labelEl.textContent = 'assistant';
   msgEl.appendChild(labelEl);
 
-  const bubbleEl  = document.createElement('div');
+  const bubbleEl = document.createElement('div');
   bubbleEl.className = 'bubble';
-  const cardEl    = document.createElement('div');
+
+  // ── Check for fallback message ──
+  const fallbackText = isFallbackResult(results, columns);
+  if (fallbackText) {
+    bubbleEl.style.cssText = 'color: var(--text-dim); font-size: 13px;';
+    bubbleEl.textContent = fallbackText;
+    msgEl.appendChild(bubbleEl);
+    document.getElementById('messages').appendChild(msgEl);
+    scrollToBottom();
+    return;
+  }
+
+  // ── Normal result ──
+  const cardEl = document.createElement('div');
   cardEl.className = 'result-card';
 
-  // Badge
+// Badge
   const badge = document.createElement('div');
   badge.className = `intent-badge ${intent === 'dashboard' ? 'intent-dashboard' : 'intent-explore'}`;
   badge.innerHTML = intent === 'dashboard' ? '⬡ &nbsp;dashboard created' : '⬡ &nbsp;explore';
   cardEl.appendChild(badge);
+
+  // SQL disclosure
+  if (data.sql) {
+    const details = document.createElement('details');
+    details.style.cssText = 'font-family: var(--mono); font-size: 10px;';
+    const summary = document.createElement('summary');
+    summary.style.cssText = 'color: var(--text-muted); cursor: pointer; letter-spacing: 0.05em; user-select: none;';
+    summary.textContent = 'view sql';
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'margin-top: 6px; padding: 8px; background: var(--bg); border: 1px solid var(--border); color: var(--text-dim); white-space: pre-wrap; word-break: break-word; line-height: 1.5; font-size: 10px;';
+    pre.textContent = data.sql;
+    details.appendChild(summary);
+    details.appendChild(pre);
+    cardEl.appendChild(details);
+  }
 
   if (results.length === 0) {
     const noData = document.createElement('div');
@@ -631,7 +718,7 @@ function renderResult(data) {
     cardEl.appendChild(rowCount);
   }
 
-  // Dashboard link — navigates the Superset iframe, not a new tab
+  // Dashboard link
   if (intent === 'dashboard' && data.dashboard_url) {
     const link = document.createElement('a');
     link.className = 'dashboard-link';
@@ -827,7 +914,7 @@ function formatNumber(n) {
 }
 function formatCell(val) {
   if (typeof val === 'number') return formatNumber(val);
-  if (typeof val === 'string' && isNumeric(val)) return formatNumber(parseFloat(val));
+  if (typeof val === 'string' && isNumeric(val) && !isDateLike(val)) return formatNumber(parseFloat(val));
   return String(val);
 }
 </script>
