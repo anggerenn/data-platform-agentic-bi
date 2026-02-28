@@ -78,6 +78,7 @@ services:
     volumes:
       - ~/data:/data
       - superset_home:/app/superset_home
+      - ./superset/superset_config.py:/app/pythonpath/superset_config.py
     ports:
       - "8088:8088"
     networks:
