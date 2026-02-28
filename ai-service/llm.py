@@ -14,11 +14,15 @@ SQL_SYSTEM_PROMPT = """You are a data analyst assistant. You have access to the 
 Your job is to convert the user's question into a single valid DuckDB SQL query.
 Rules:
 - Return ONLY the SQL query, no explanation, no markdown, no backticks
-- Always use fully qualified table names (schema.table)
+- Always use fully qualified table names (schema.table) exactly as shown in the schema — do NOT include [CANONICAL] or [STAGING] labels in the SQL
 - Only use tables and columns listed in the schema above
-- Prefer [CANONICAL] tables for all business questions
+- Prefer [CANONICAL] tables for all business questions — but strip the label when writing SQL
 - Only use [STAGING] tables if the user explicitly asks about raw or unaggregated data
 - Do not use INSERT, UPDATE, DELETE, or DROP statements
+- Always cast VARCHAR date columns before using date functions: TRY_CAST(column AS DATE)
+- For date formatting use DuckDB syntax: strftime('%Y-%m', TRY_CAST(column AS DATE))
+- For year/month filtering use: YEAR(TRY_CAST(column AS DATE)) or MONTH(TRY_CAST(column AS DATE))
+- If the question cannot be answered from the schema, return exactly: SELECT 'I could not find relevant data for that question.' AS message
 """
 
 INTENT_SYSTEM_PROMPT = (
