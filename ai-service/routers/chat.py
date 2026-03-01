@@ -11,6 +11,46 @@ router = APIRouter()
 
 DASHBOARD_KEYWORDS = {"dashboard", "save", "create", "persist", "keep", "store"}
 
+# ── Junk query detection ───────────────────────────────────────────────────────
+# Blocklist: profanity and common nonsense patterns
+_JUNK_BLOCKLIST = re.compile(
+    r'(fuck|shit|bitch|ass|damn|crap|bastard|dick|piss|cock|cunt|motherfuck\w*)',
+    re.IGNORECASE
+)
+
+def _is_junk_query(query: str) -> bool:
+    """
+    Returns True if the query should be rejected before reaching the LLM.
+    Catches:
+      - Profanity / nonsense blocklist matches
+      - Queries with no word of ≥4 alphabetic characters (e.g. "asd", "ppp", "lo")
+    Allows short but valid queries like "top 5 cities" (has "cities" ≥4 chars).
+    """
+    if _JUNK_BLOCKLIST.search(query):
+        return True
+    # Extract all purely-alphabetic tokens and check if any is ≥4 chars
+    alpha_words = re.findall(r'[a-zA-Z]{4,}', query)
+    return len(alpha_words) == 0
+
+
+# ── chart_exclude parser ───────────────────────────────────────────────────────
+_CHART_EXCLUDE_RE = re.compile(r'--\s*chart_exclude:\s*(.+)$', re.IGNORECASE | re.MULTILINE)
+
+def extract_chart_exclude(sql: str) -> tuple[str, list[str]]:
+    """
+    Parses the optional -- chart_exclude: col1, col2 comment from generated SQL.
+    Returns (clean_sql, excluded_columns).
+    clean_sql has the comment line stripped so DuckDB never sees it.
+    """
+    match = _CHART_EXCLUDE_RE.search(sql)
+    if not match:
+        return sql, []
+    excluded = [c.strip() for c in match.group(1).split(',') if c.strip()]
+    clean_sql = _CHART_EXCLUDE_RE.sub('', sql).strip().rstrip(';').strip() + ';'
+    # Normalise: remove any double semicolons that might result
+    clean_sql = re.sub(r';+', ';', clean_sql)
+    return clean_sql, excluded
+
 # Patterns that indicate a poisoned or junk history entry — reject these
 # before passing history to the LLM so they can't influence SQL generation.
 # Includes any content that starts with a word that could be mistaken for SQL
@@ -93,8 +133,13 @@ def chat(body: ChatRequest):
     try:
         query_lower = body.query.strip().lower()
 
-        # Reject suspiciously short or empty queries before hitting the LLM
-        if len(query_lower) <= 1:
+        # ── Junk query guard ──────────────────────────────────────────────
+        # Reject before hitting the LLM if:
+        #   (a) matches profanity / nonsense blocklist, OR
+        #   (b) contains no word with ≥4 alphabetic characters
+        # This preserves short but valid queries like "top 5 cities" (has "cities")
+        # while blocking "asd", "motherfucker", "ppp", etc.
+        if _is_junk_query(query_lower):
             return {
                 "intent": "explore",
                 "query": body.query,
@@ -113,7 +158,12 @@ def chat(body: ChatRequest):
         # Sanitize history server-side — never trust raw client history
         clean_history = sanitize_history(body.history)
 
-        sql = generate_sql(body.query, history=clean_history)
+        raw_sql = generate_sql(body.query, history=clean_history)
+
+        # Parse and strip the optional -- chart_exclude: comment before execution.
+        # The comment is injected by DeepSeek when the user asks to hide columns
+        # from the chart — DuckDB must never see it.
+        sql, chart_exclude_columns = extract_chart_exclude(raw_sql)
 
         # UnsafeSQLError is raised by validate_sql() inside execute_query()
         # for non-SELECT statements. Return 400 with a clear message.
@@ -138,6 +188,7 @@ def chat(body: ChatRequest):
                 "query": body.query,
                 "sql": sql,
                 "results": results,
+                "chart_exclude_columns": chart_exclude_columns,
                 **dashboard,
             }
 
@@ -146,6 +197,7 @@ def chat(body: ChatRequest):
             "query": body.query,
             "sql": sql,
             "results": results,
+            "chart_exclude_columns": chart_exclude_columns,
         }
 
     except HTTPException:

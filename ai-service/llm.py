@@ -29,6 +29,10 @@ Rules:
 - Window functions: every LAG(), LEAD(), SUM() OVER(), etc. must have balanced parentheses. Count opening and closing parentheses before returning the query — they must match exactly
 - When using LAG() or LEAD() inside a larger expression, wrap each window function call in its own parentheses before combining: (LAG(SUM(col)) OVER (ORDER BY x)) not LAG(SUM(col) OVER (ORDER BY x))
 - If the question cannot be answered from the schema, return exactly: SELECT 'I could not find relevant data for that question.' AS message
+- If the user says they do not want to see certain columns in the chart (e.g. "no need to visualize month", "don't show city in the chart"), append a comment on the very last line of the SQL in this exact format: -- chart_exclude: col1, col2
+  The comment must be on its own line after the semicolon (or after the last SQL line if no semicolon). Example:
+  SELECT city, month, revenue FROM ...;
+  -- chart_exclude: month
 - Use conversation history to understand follow-up questions and references like 'that', 'same', 'those cities', 'now filter by', etc.
 """
 
