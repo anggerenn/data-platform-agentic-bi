@@ -1015,7 +1015,7 @@ function renderResult(data) {
     canvas.id = chartId;
     chartWrap.appendChild(canvas);
     cardEl.appendChild(chartWrap);
-    setTimeout(() => renderChart(chartId, columns, results), 0);
+    setTimeout(() => renderChart(chartId, columns, results, data.chart_exclude_columns || []), 0);
 
     const tableWrap = document.createElement('div');
     tableWrap.className = 'data-table-wrap';
@@ -1077,14 +1077,21 @@ function detectScaleMismatch(valueCols, aggData, aggLabels) {
   return minOfMax > 0 && (maxOfMax / minOfMax) >= 20;
 }
 
-function renderChart(canvasId, columns, rows) {
+function renderChart(canvasId, columns, rows, excludeColumns = []) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
   if (chartRegistry.has(canvasId)) chartRegistry.get(canvasId).destroy();
 
   const sample    = rows[0];
   const labelCol  = columns.find(c => typeof sample[c] === 'string' || isDateLike(sample[c])) || columns[0];
-  const valueCols = columns.filter(c => c !== labelCol && isNumeric(sample[c]));
+  // Exclude columns the user asked to hide from the chart (but keep in table).
+  // excludeColumns comes from the -- chart_exclude: comment in the generated SQL.
+  const excludeSet = new Set((excludeColumns || []).map(c => c.toLowerCase().trim()));
+  const valueCols = columns.filter(c =>
+    c !== labelCol &&
+    isNumeric(sample[c]) &&
+    !excludeSet.has(c.toLowerCase().trim())
+  );
 
   if (valueCols.length === 0) {
     canvas.closest('.chart-wrap').style.display = 'none';
