@@ -12,10 +12,14 @@ router = APIRouter()
 DASHBOARD_KEYWORDS = {"dashboard", "save", "create", "persist", "keep", "store"}
 
 # Patterns that indicate a poisoned or junk history entry — reject these
-# before passing history to the LLM so they can't influence SQL generation
+# before passing history to the LLM so they can't influence SQL generation.
+# Includes any content that starts with a word that could be mistaken for SQL
+# by DeepSeek (e.g. "Queried...", "SQL executed:", "Returned...") — these were
+# previously used as assistant history prefixes and caused "QUERIED is not SELECT" errors.
 _HISTORY_POISON_PATTERNS = re.compile(
     r'(SQL executed:|could not find relevant|cannot answer|syntax error|server error|'
-    r'parser error|^\s*[a-z]{1,2}\s*$)',
+    r'parser error|unrecognised sql|disallowed sql|^queried|^returned \d|'
+    r'^\s*[a-z]{1,3}\s*$)',
     re.IGNORECASE
 )
 

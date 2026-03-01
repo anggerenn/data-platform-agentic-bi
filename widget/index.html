@@ -755,7 +755,7 @@ async function sendMessage() {
       if (!isFallbackResult(_results, _cols) && data.sql) {
         conversationHistory.push({
           role: 'assistant',
-          content: 'Queried the data and returned ' + _results.length + ' rows. SQL: ' + data.sql,
+          content: 'Returned ' + _results.length + ' rows with columns: ' + _cols.join(', ') + '.',
         });
       }
 
@@ -882,15 +882,9 @@ function buildFallbackSummary() {
     .filter(m => m.role === 'user')
     .map(m => `- ${m.content}`);
 
-  const sqlBlocks = conversationHistory
-    .filter(m => m.role === 'assistant' && m.content.includes('SQL: '))
-    .map(m => {
-      const match = m.content.match(/SQL: ([\s\S]+)/);
-      return match ? match[1].trim() : null;
-    })
-    .filter(Boolean);
-
-  const lastSql = sqlBlocks.length ? `\`\`\`sql\n${sqlBlocks[sqlBlocks.length - 1]}\n\`\`\`` : '_Not available_';
+  // SQL is no longer stored in assistant history entries (to prevent prompt injection).
+  // Fall back to noting it's unavailable — the /summary endpoint gets it from full history.
+  const lastSql = '_Not available in offline mode — use the copy button after reconnecting._';
 
   return `## Session Summary
 
