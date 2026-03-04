@@ -52,8 +52,16 @@ def run_dlt():
     pipeline = dlt.pipeline(
         pipeline_name='analytics',
         dataset_name='raw',
-        destination=dlt.destinations.duckdb(
-            credentials=os.path.expanduser(os.environ["ANALYTICS_DB_PATH"])
+        destination=dlt.destinations.clickhouse(
+            credentials={
+                "database": os.environ["CLICKHOUSE_DB"],
+                "username": os.environ["CLICKHOUSE_USER"],
+                "password": os.environ["CLICKHOUSE_PASSWORD"],
+                "host": os.environ["CLICKHOUSE_HOST"],
+                "http_port": int(os.environ.get("CLICKHOUSE_PORT", "8123")),
+                "port": int(os.environ.get("CLICKHOUSE_NATIVE_PORT", "9000")),
+                "secure": 0,
+            }
         ),
         pipelines_dir=os.path.expanduser(os.environ["ANALYTICS_PIPELINES_DIR"])
     )

@@ -43,8 +43,13 @@ services:
         condition: service_healthy
     environment:
       PREFECT_API_URL: "http://prefect-server:4200/api"
-      ANALYTICS_DB_PATH: "/data/analytics.duckdb"
       ANALYTICS_PIPELINES_DIR: "/data/pipelines"
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: ${CLICKHOUSE_PORT:-8123}
+      CLICKHOUSE_NATIVE_PORT: ${CLICKHOUSE_NATIVE_PORT:-9000}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-default}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
     volumes:
       - ~/data:/data
     networks:

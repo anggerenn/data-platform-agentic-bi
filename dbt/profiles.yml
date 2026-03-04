@@ -2,6 +2,14 @@ default:
   target: dev
   outputs:
     dev:
-      type: duckdb
-      path: "{{ env_var('ANALYTICS_DB_PATH') }}"
+      type: clickhouse
       schema: transformed
+      host: "{{ env_var('CLICKHOUSE_HOST') }}"
+      port: "{{ env_var('CLICKHOUSE_PORT') | int }}"
+      user: "{{ env_var('CLICKHOUSE_USER') }}"
+      password: "{{ env_var('CLICKHOUSE_PASSWORD') }}"
+      database: "{{ env_var('CLICKHOUSE_DB') }}"
+      secure: false
+      verify: false
+      connect_timeout: 10
+      send_receive_timeout: 300
