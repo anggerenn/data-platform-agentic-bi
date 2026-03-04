@@ -51,43 +51,24 @@ services:
       - data-network
     restart: unless-stopped
 
-  # evidence:
-  #   build:
-  #     context: .
-  #     dockerfile: docker/Dockerfile.evidence
-  #   volumes:
-  #     - /data:/data
-  #   environment:
-  #     NODE_OPTIONS: "--max-old-space-size=1800"
-  #   mem_limit: 2g
-  #   ports:
-  #     - "3000:3000"
-  #   networks:
-  #     - data-network
-  #   restart: unless-stopped   
-  
-  superset:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.superset
-    user: root
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3
     environment:
-      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
-      SUPERSET_ADMIN_USERNAME: ${SUPERSET_ADMIN_USERNAME:-admin}
-      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD:-admin}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-default}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-changeme}
+    mem_limit: 2g
     volumes:
-      - ~/data:/data
-      - superset_home:/app/superset_home
-      - ./superset/superset_config.py:/app/pythonpath/superset_config.py
+      - ~/data/clickhouse:/var/lib/clickhouse
     ports:
-      - "8088:8088"
+      - "8123:8123"
+      - "9000:9000"
     networks:
       - data-network
     restart: unless-stopped
 
 volumes:
   postgres_data:
-  superset_home:
 
 networks:
   data-network:

@@ -3,7 +3,6 @@ services:
     exclude_from_hc: true
     volumes:
       - /data:/data
-  superset:
+  clickhouse:
     volumes:
-      - /data:/data
-      - superset_home:/app/superset_home
+      - /data/clickhouse:/var/lib/clickhouse
