@@ -72,8 +72,84 @@ services:
       - data-network
     restart: unless-stopped
 
+  lightdash-db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: lightdash
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-prefect}
+      POSTGRES_DB: lightdash
+    volumes:
+      - lightdash_db_data:/var/lib/postgresql/data
+    networks:
+      - data-network
+    restart: unless-stopped
+
+  lightdash:
+    image: lightdash/lightdash:0.2473.1   # pinned to match CLI version
+    platform: linux/amd64                 # amd64-only image, runs via Rosetta on Mac
+    depends_on:
+      lightdash-db:
+        condition: service_started
+      clickhouse:
+        condition: service_started
+    environment:
+      - PGHOST=lightdash-db
+      - PGPORT=5432
+      - PGUSER=lightdash
+      - PGPASSWORD=${POSTGRES_PASSWORD:-prefect}
+      - PGDATABASE=lightdash
+      - LIGHTDASH_SECRET=${LIGHTDASH_SECRET:-changeme}
+      - LIGHTDASH_SECURE_COOKIES=false
+      - DBT_PROJECT_DIR=/usr/app/dbt
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dbt:/usr/app/dbt
+    networks:
+      - data-network
+    mem_limit: 800m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080/api/v1/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # One-time manual first-boot (free self-hosted Lightdash limitation):
+  #   1. Visit http://localhost:8080/register and create your admin account
+  #   2. Go to Settings → Personal Access Tokens → generate a token
+  #   3. Set LIGHTDASH_API_KEY in .env (local) or Coolify env vars (VPS)
+  #   4. Run: docker-compose up lightdash-deploy
+  # On subsequent deploys (e.g. after dbt model changes), just re-run step 4.
+  lightdash-deploy:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.lightdash-deploy
+    working_dir: /dbt
+    depends_on:
+      lightdash:
+        condition: service_healthy
+    environment:
+      - CLICKHOUSE_HOST=clickhouse
+      - CLICKHOUSE_PORT=${CLICKHOUSE_PORT:-8123}
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-default}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-changeme}
+      - LIGHTDASH_URL=http://lightdash:8080
+      - LIGHTDASH_EMAIL=${LIGHTDASH_EMAIL}
+      - LIGHTDASH_PASSWORD=${LIGHTDASH_PASSWORD}
+      - LIGHTDASH_API_KEY=${LIGHTDASH_API_KEY}
+      - CI=true
+    volumes:
+      - ./dbt:/dbt
+      - ./dbt/profiles.yml:/root/.dbt/profiles.yml
+    networks:
+      - data-network
+    restart: "no"
+
 volumes:
   postgres_data:
+  lightdash_db_data:
 
 networks:
   data-network:

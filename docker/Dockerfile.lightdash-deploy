@@ -1,0 +1,21 @@
+FROM python:3.11-slim
+
+# Install curl, Node.js 20
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install dbt-clickhouse
+RUN pip install --no-cache-dir dbt-clickhouse
+
+# Install Lightdash CLI (pinned to match server image)
+RUN npm install -g @lightdash/cli@0.2473.1
+
+# Copy and set entrypoint script
+COPY docker/lightdash-deploy-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
