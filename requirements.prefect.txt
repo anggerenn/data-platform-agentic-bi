@@ -1,0 +1,3 @@
+dlt[clickhouse]
+python-dotenv
+dbt-clickhouse
