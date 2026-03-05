@@ -34,4 +34,4 @@ services:
     exclude_from_hc: true
     volumes:
       - /data:/data
-      - ./dbt:/app/dbt:ro
+      - ./dbt:/dbt:ro
