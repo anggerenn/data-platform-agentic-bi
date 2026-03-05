@@ -12,7 +12,10 @@ from pydantic_ai.messages import (
     ModelMessage,
     ModelMessagesTypeAdapter,
     ModelRequest,
+    ModelResponse,
+    ToolCallPart,
     ToolReturnPart,
+    UserPromptPart,
 )
 
 from agent import AgentDeps, agent
@@ -28,35 +31,68 @@ MAX_HISTORY = 20  # sliding window: keep last N messages
 
 
 def _strip_explore_rows(messages: list[ModelMessage]) -> list[ModelMessage]:
-    """Remove the rows payload from explore_data tool returns, keeping sql/columns/row_count."""
+    """Remove rows from explore_data tool returns and data from final_result args."""
     cleaned = []
     for msg in messages:
-        if not isinstance(msg, ModelRequest):
+        if isinstance(msg, ModelRequest):
+            new_parts = []
+            for part in msg.parts:
+                if (
+                    isinstance(part, ToolReturnPart)
+                    and part.tool_name == 'explore_data'
+                    and isinstance(part.content, dict)
+                    and 'rows' in part.content
+                ):
+                    part = dataclasses.replace(
+                        part,
+                        content={k: v for k, v in part.content.items() if k != 'rows'},
+                    )
+                new_parts.append(part)
+            cleaned.append(dataclasses.replace(msg, parts=new_parts))
+
+        elif isinstance(msg, ModelResponse):
+            # Strip `data` rows from final_result ToolCallPart args to keep history lean
+            new_parts = []
+            for part in msg.parts:
+                if isinstance(part, ToolCallPart) and part.tool_name == 'final_result':
+                    try:
+                        args = json.loads(part.args) if isinstance(part.args, str) else dict(part.args)
+                        if 'data' in args:
+                            args['data'] = None
+                        part = dataclasses.replace(part, args=json.dumps(args))
+                    except Exception:
+                        pass
+                new_parts.append(part)
+            cleaned.append(dataclasses.replace(msg, parts=new_parts))
+
+        else:
             cleaned.append(msg)
-            continue
-        new_parts = []
-        for part in msg.parts:
-            if (
-                isinstance(part, ToolReturnPart)
-                and part.tool_name == 'explore_data'
-                and isinstance(part.content, dict)
-                and 'rows' in part.content
-            ):
-                part = dataclasses.replace(
-                    part,
-                    content={k: v for k, v in part.content.items() if k != 'rows'},
-                )
-            new_parts.append(part)
-        cleaned.append(dataclasses.replace(msg, parts=new_parts))
+
     return cleaned
 
 
+def _trim_to_user_turn(messages: list[ModelMessage]) -> list[ModelMessage]:
+    """Ensure history starts at a clean user-prompt turn.
+
+    After applying the sliding window, the slice may begin with an orphaned
+    ToolReturnPart (no preceding tool_calls), which DeepSeek rejects with 400.
+    Scan forward until the first ModelRequest that contains a UserPromptPart.
+    """
+    for i, msg in enumerate(messages):
+        if isinstance(msg, ModelRequest) and any(
+            isinstance(p, UserPromptPart) for p in msg.parts
+        ):
+            return messages[i:]
+    return []
+
+
 def _process_history(raw_history: list) -> list[ModelMessage]:
-    """Deserialize, apply sliding window, and strip row data from incoming history."""
+    """Deserialize, apply sliding window, strip rows/data, and ensure clean start."""
     if not raw_history:
         return []
     messages = list(ModelMessagesTypeAdapter.validate_python(raw_history))
-    return _strip_explore_rows(messages[-MAX_HISTORY:])
+    windowed = _strip_explore_rows(messages[-MAX_HISTORY:])
+    return _trim_to_user_turn(windowed)
 
 
 @flask_app.route('/', methods=['GET'])
@@ -75,15 +111,22 @@ def chat():
 
     history = _process_history(body.get('history', []))
 
-    result = asyncio.run(
-        agent.run(question, deps=AgentDeps(vanna=vn), message_history=history)
-    )
-
-    new_msgs = _strip_explore_rows(result.new_messages())
-    return jsonify({
-        **result.output.model_dump(),
-        "new_messages": json.loads(ModelMessagesTypeAdapter.dump_json(new_msgs)),
-    })
+    try:
+        result = asyncio.run(
+            agent.run(question, deps=AgentDeps(vanna=vn), message_history=history)
+        )
+        new_msgs = _strip_explore_rows(result.new_messages())
+        return jsonify({
+            **result.output.model_dump(),
+            "new_messages": json.loads(ModelMessagesTypeAdapter.dump_json(new_msgs)),
+        })
+    except Exception as e:
+        return jsonify({
+            "intent": "explore",
+            "text": f"Something went wrong: {e}",
+            "sql": None, "data": None, "columns": None, "row_count": None,
+            "new_messages": [],
+        })
 
 
 @flask_app.route('/health', methods=['GET'])

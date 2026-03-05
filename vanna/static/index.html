@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Analytics</title>
+  <script src="https://cdn.plot.ly/plotly-basic-2.35.2.min.js" charset="utf-8"></script>
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -161,6 +162,31 @@
       color: #999;
     }
 
+    /* ── Chart ────────────────────────────────────────────── */
+    .chart-wrap {
+      margin-top: 8px;
+      border: 1px solid #e8e8ee;
+      border-radius: 6px;
+      overflow: visible;
+      background: #fafafa;
+      width: 100%;
+    }
+
+    /* ── CSV export ───────────────────────────────────────── */
+    .csv-btn {
+      margin-top: 6px;
+      display: inline-block;
+      background: none;
+      border: 1px solid #7262ff;
+      color: #7262ff;
+      font-size: 11px;
+      border-radius: 5px;
+      padding: 3px 9px;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    .csv-btn:hover { background: #f0eeff; }
+
     /* ── Typing indicator ─────────────────────────────────── */
     .typing-wrap {
       display: flex;
@@ -215,6 +241,53 @@
     }
     #send-btn:disabled { opacity: 0.45; cursor: default; }
 
+    #stop-btn {
+      display: none;
+      background: #ff4d4d;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #stop-btn:hover { background: #e03e3e; }
+
+    .panel-header button {
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 16px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 2px 4px;
+      opacity: 0.85;
+      border-radius: 4px;
+    }
+    .panel-header button:hover { opacity: 1; background: rgba(255,255,255,0.15); }
+
+    /* ── Side-panel mode (right) ──────────────────────────── */
+    body.side-panel #lightdash-frame {
+      width: calc(100% - 420px);
+    }
+    body.side-panel #widget {
+      position: fixed;
+      top: 0; right: 0; bottom: 0; left: auto;
+      width: 420px;
+      height: 100vh;
+      align-items: stretch;
+    }
+    body.side-panel #chat-panel {
+      display: flex !important;
+      width: 420px;
+      height: 100vh;
+      border-radius: 0;
+      margin-bottom: 0;
+      box-shadow: -2px 0 16px rgba(0,0,0,0.12);
+    }
+    body.side-panel #chat-btn { display: none; }
+
     /* ── Floating button ──────────────────────────────────── */
     #chat-btn {
       width: 56px;
@@ -244,13 +317,22 @@
   <div id="chat-panel">
     <div class="panel-header">
       <span>✦ Ask your data</span>
-      <button onclick="togglePanel()" title="Close">&#x2715;</button>
+      <div style="display:flex;gap:2px;align-items:center">
+        <button id="expand-btn" onclick="toggleSidePanel()" title="Expand to side panel">
+          <svg id="expand-icon" width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <polyline points="8,1 12,1 12,5"/><line x1="12" y1="1" x2="7" y2="6"/>
+            <polyline points="5,12 1,12 1,8"/><line x1="1" y1="12" x2="6" y2="7"/>
+          </svg>
+        </button>
+        <button id="close-btn" onclick="togglePanel()" title="Close">&#x2715;</button>
+      </div>
     </div>
     <div id="messages"></div>
     <div class="input-area">
       <input id="user-input" type="text" placeholder="Ask a question…"
              onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); sendMessage(); }">
       <button id="send-btn" onclick="sendMessage()">Send</button>
+      <button id="stop-btn" onclick="stopRequest()">■ Stop</button>
     </div>
   </div>
 
@@ -266,11 +348,33 @@
   // Conversation history — passed back on every request (row-stripped server-side)
   let history = [];
   let isOpen = false;
+  let isSidePanel = false;
+  let exchangeCount = 0;
+  const MAX_EXCHANGES = 20;
+  let currentAbort = null;
 
   function togglePanel() {
+    if (isSidePanel) return; // side panel handles its own close
     isOpen = !isOpen;
     document.getElementById('chat-panel').classList.toggle('open', isOpen);
     if (isOpen) document.getElementById('user-input').focus();
+  }
+
+  function toggleSidePanel() {
+    isSidePanel = !isSidePanel;
+    document.body.classList.toggle('side-panel', isSidePanel);
+    // Swap SVG: collapse arrows when in side panel, expand arrows when popup
+    document.getElementById('expand-icon').innerHTML = isSidePanel
+      ? '<polyline points="1,6 1,1 6,1"/><line x1="1" y1="1" x2="6" y2="6"/><polyline points="12,7 12,12 7,12"/><line x1="12" y1="12" x2="7" y2="7"/>'
+      : '<polyline points="8,1 12,1 12,5"/><line x1="12" y1="1" x2="7" y2="6"/><polyline points="5,12 1,12 1,8"/><line x1="1" y1="12" x2="6" y2="7"/>';
+    document.getElementById('expand-btn').title = isSidePanel ? 'Back to popup' : 'Expand to side panel';
+    document.getElementById('close-btn').style.display = isSidePanel ? 'none' : '';
+    if (isSidePanel) {
+      // Force panel open in side mode
+      document.getElementById('chat-panel').classList.add('open');
+      isOpen = true;
+      document.getElementById('user-input').focus();
+    }
   }
 
   // ── DOM helpers ──────────────────────────────────────────
@@ -303,30 +407,84 @@
     return bubble;
   }
 
+  // ── Strip fenced code blocks and markdown tables from text ──
+  // Both are rendered separately (SQL via toggle, data in table below)
+
+  function stripCodeBlocks(text) {
+    // Remove ```lang\n...\n``` and bare ```...``` blocks
+    let out = text.replace(/```[\w]*\n[\s\S]*?```/g, '').replace(/```[\s\S]*?```/g, '');
+    // Remove markdown table lines (lines starting with |)
+    out = out.split('\n').filter(l => !l.trim().startsWith('|')).join('\n');
+    // Collapse 3+ blank lines to 2
+    return out.replace(/\n{3,}/g, '\n\n').trim();
+  }
+
   // ── Minimal markdown → HTML ──────────────────────────────
 
   function md(text) {
-    // Escape HTML first to prevent XSS
     const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-
-    const lines = text.split('\n');
-    const out = [];
-    let listType = null; // 'ol' | 'ul' | null
-
-    const flushList = () => {
-      if (listType) { out.push(`</${listType}>`); listType = null; }
-    };
 
     const inline = raw => esc(raw)
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.+?)\*/g,     '<em>$1</em>')
       .replace(/`([^`]+)`/g,     '<code style="background:#f0f0f5;padding:1px 4px;border-radius:3px;font-size:11px">$1</code>');
 
+    const lines = text.split('\n');
+    const out = [];
+    let listType = null;
+    let tableRows = [];
+
+    const flushList = () => {
+      if (listType) { out.push(`</${listType}>`); listType = null; }
+    };
+
+    const flushTable = () => {
+      if (!tableRows.length) return;
+      out.push('<table style="border-collapse:collapse;width:100%;font-size:11.5px;margin:.4em 0">');
+      let firstRow = true;
+      tableRows.forEach(row => {
+        const cells = row.split('|').slice(1, -1).map(c => c.trim());
+        if (firstRow) {
+          out.push('<thead><tr>' + cells.map(c =>
+            `<th style="background:#f5f5fa;padding:4px 8px;text-align:left;border-bottom:1px solid #e0e0e8;font-weight:600;color:#555;white-space:nowrap">${inline(c)}</th>`
+          ).join('') + '</tr></thead><tbody>');
+          firstRow = false;
+        } else {
+          out.push('<tr>' + cells.map(c =>
+            `<td style="padding:3px 8px;border-bottom:1px solid #f0f0f5;color:#333">${inline(c)}</td>`
+          ).join('') + '</tr>');
+        }
+      });
+      out.push('</tbody></table>');
+      tableRows = [];
+    };
+
     for (const line of lines) {
+      const trimmed = line.trim();
+      const isTableRow = trimmed.startsWith('|') && trimmed.endsWith('|');
+      const isSepRow  = /^\|[\s\-:|]+\|$/.test(trimmed);
+
+      if (isSepRow)  { continue; } // skip `|---|---|` separator rows
+      if (isTableRow){ flushList(); tableRows.push(trimmed); continue; }
+
+      flushTable();
+
+      const h3 = line.match(/^###\s+(.*)/);
+      const h2 = line.match(/^##\s+(.*)/);
+      const h1 = line.match(/^#\s+(.*)/);
       const ol = line.match(/^(\d+)\.\s+(.*)/);
       const ul = line.match(/^[-*]\s+(.*)/);
 
-      if (ol) {
+      if (h1) {
+        flushList();
+        out.push(`<div style="font-weight:700;font-size:14px;margin:.6em 0 .2em;color:#111">${inline(h1[1])}</div>`);
+      } else if (h2) {
+        flushList();
+        out.push(`<div style="font-weight:700;font-size:13px;margin:.5em 0 .2em;color:#222">${inline(h2[1])}</div>`);
+      } else if (h3) {
+        flushList();
+        out.push(`<div style="font-weight:600;font-size:12px;margin:.4em 0 .2em;color:#333">${inline(h3[1])}</div>`);
+      } else if (ol) {
         if (listType !== 'ol') { flushList(); out.push('<ol style="margin:.4em 0 .4em 1.4em;padding:0">'); listType = 'ol'; }
         out.push(`<li>${inline(ol[2])}</li>`);
       } else if (ul) {
@@ -338,9 +496,115 @@
       }
     }
     flushList();
+    flushTable();
 
-    // Clean up leading/trailing lone <br>
     return out.join('').replace(/^(<br>)+/, '').replace(/(<br>)+$/, '');
+  }
+
+  // ── Chart helpers ────────────────────────────────────────
+
+  const CHART_COLORS = ['#7262ff','#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#ff922b','#cc5de8'];
+
+  function detectChart(columns, data) {
+    if (!data || data.length < 2) return null;
+    const s = data[0];
+
+    const isDateVal = v => typeof v === 'string' && /^\d{4}-\d{2}/.test(v);
+    const isNumVal  = v => typeof v === 'number';
+    const isStrVal  = v => typeof v === 'string' && !/^\d{4}-\d{2}/.test(v);
+
+    const dateCols = columns.filter(c => isDateVal(s[c]));
+    const numCols  = columns.filter(c => isNumVal(s[c]));
+    const strCols  = columns.filter(c => isStrVal(s[c]));
+
+    // 4+ columns — too complex for a chart
+    if (columns.length > 3) return null;
+
+    // Grouped bar: exactly date + 1 category + 1 numeric (e.g. month × city × revenue)
+    if (dateCols.length === 1 && strCols.length === 1 && numCols.length === 1) {
+      return { type: 'bar_grouped', xCol: dateCols[0], groupCol: strCols[0], yCol: numCols[0] };
+    }
+
+    // Time series: date x-axis, up to 2 numeric y-series
+    if (dateCols.length === 1 && numCols.length >= 1) {
+      return { type: 'line', xCol: dateCols[0], yCols: numCols.slice(0, 2) };
+    }
+
+    // Bar chart: single categorical x-axis
+    if (strCols.length === 1 && numCols.length >= 1 && dateCols.length === 0 && data.length <= 25) {
+      return { type: 'bar', xCol: strCols[0], yCol: numCols[0] };
+    }
+
+    return null;
+  }
+
+  function renderChart(columns, data) {
+    const spec = detectChart(columns, data);
+    if (!spec || typeof Plotly === 'undefined') return null;
+
+    const el = document.createElement('div');
+    el.className = 'chart-wrap';
+
+    const layout = {
+      margin: { t: 10, r: 20, b: 50, l: 55 },
+      height: 185,
+      paper_bgcolor: 'rgba(0,0,0,0)',
+      plot_bgcolor:  'rgba(0,0,0,0)',
+      font: { size: 10, color: '#555' },
+      xaxis: { tickfont: { size: 9 }, tickangle: -30 },
+      yaxis: { tickfont: { size: 9 }, gridcolor: '#ebebf0' },
+      showlegend: false,
+    };
+    const config = {
+      responsive: true,
+      displayModeBar: 'hover',   // show on hover only
+      modeBarButtons: [['resetScale2d']],  // only the reset button
+      scrollZoom: false,
+      doubleClick: 'reset',      // double-click anywhere to reset
+    };
+
+    let traces = [];
+
+    if (spec.type === 'line') {
+      traces = spec.yCols.map((yCol, i) => ({
+        x: data.map(r => r[spec.xCol]),
+        y: data.map(r => r[yCol]),
+        type: 'scatter', mode: 'lines+markers',
+        name: yCol,
+        line: { color: CHART_COLORS[i], width: 2 },
+        marker: { color: CHART_COLORS[i], size: 5 },
+      }));
+      if (traces.length > 1) { layout.showlegend = true; layout.legend = { font: { size: 9 }, orientation: 'h', x: 0, y: 1.05, xanchor: 'left', yanchor: 'bottom' }; layout.margin.t = 32; }
+    }
+
+    if (spec.type === 'bar_grouped') {
+      const groups = [...new Set(data.map(r => r[spec.groupCol]))];
+      traces = groups.map((g, i) => {
+        const rows = data.filter(r => r[spec.groupCol] === g);
+        return {
+          x: rows.map(r => r[spec.xCol]),
+          y: rows.map(r => r[spec.yCol]),
+          name: g, type: 'bar',
+          marker: { color: CHART_COLORS[i % CHART_COLORS.length] },
+        };
+      });
+      layout.barmode = 'group';
+      layout.showlegend = true;
+      layout.legend = { font: { size: 9 }, orientation: 'h', x: 0, y: 1.05, xanchor: 'left', yanchor: 'bottom' };
+      layout.margin.t = 32;
+    }
+
+    if (spec.type === 'bar') {
+      traces = [{
+        x: data.map(r => r[spec.xCol]),
+        y: data.map(r => r[spec.yCol]),
+        type: 'bar',
+        marker: { color: CHART_COLORS[0] },
+      }];
+    }
+
+    Plotly.newPlot(el, traces, layout, config);
+    return el;
   }
 
   // ── Response renderer ────────────────────────────────────
@@ -348,9 +612,15 @@
   function renderResult(result) {
     const wrap = document.createElement('div');
 
-    // Text answer (markdown rendered)
+    // Chart first (explore only)
+    if (result.data && result.data.length >= 2 && result.columns) {
+      const chartEl = renderChart(result.columns, result.data);
+      if (chartEl) wrap.appendChild(chartEl);
+    }
+
+    // Text answer (markdown rendered, code blocks + table lines stripped)
     const textEl = document.createElement('div');
-    textEl.innerHTML = md(result.text);
+    textEl.innerHTML = md(stripCodeBlocks(result.text));
     wrap.appendChild(textEl);
 
     // SQL collapsible (explore only)
@@ -417,51 +687,117 @@
       countEl.className = 'row-count';
       countEl.textContent = `${result.row_count} row${result.row_count !== 1 ? 's' : ''}`;
       wrap.appendChild(countEl);
+
+      const csvBtn = document.createElement('button');
+      csvBtn.className = 'csv-btn';
+      csvBtn.textContent = '⬇ Export CSV';
+      csvBtn.onclick = () => exportCSV(result.columns, result.data);
+      wrap.appendChild(csvBtn);
     }
 
     return wrap;
   }
 
+  // ── CSV export ───────────────────────────────────────────
+
+  function exportCSV(columns, data) {
+    const escape = v => {
+      const s = (v === null || v === undefined) ? '' : String(v);
+      return s.includes(',') || s.includes('"') || s.includes('\n')
+        ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows = [columns.map(escape).join(',')];
+    data.forEach(row => rows.push(columns.map(col => escape(row[col])).join(',')));
+    const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'export.csv'; a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // ── Send message ─────────────────────────────────────────
+
+  function showSessionBanner(msg, color) {
+    const banner = document.createElement('div');
+    banner.style.cssText = `font-size:11px;color:${color};background:${color}18;border:1px solid ${color}55;border-radius:6px;padding:5px 8px;text-align:center;margin:2px 0`;
+    banner.textContent = msg;
+    document.getElementById('messages').appendChild(banner);
+    scrollToBottom();
+  }
 
   async function sendMessage() {
     const input = document.getElementById('user-input');
     const sendBtn = document.getElementById('send-btn');
     const question = input.value.trim();
-    if (!question) return;
+    if (!question || exchangeCount >= MAX_EXCHANGES) return;
 
     input.value = '';
     input.disabled = true;
     sendBtn.disabled = true;
+    document.getElementById('send-btn').style.display = 'none';
+    document.getElementById('stop-btn').style.display = 'block';
 
     appendMessage('user', question);
     const typingBubble = showTyping();
 
+    currentAbort = new AbortController();
+
+    let atLimit = false;
     try {
       const resp = await fetch('/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: question, history }),
+        signal: currentAbort.signal,
       });
 
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const result = await resp.json();
 
       typingBubble.remove();
-
-      // Maintain history — new_messages already row-stripped by server
       history = history.concat(result.new_messages || []);
-
+      // Cap client-side history to prevent payload bloat (~8 exchanges)
+      if (history.length > 40) history = history.slice(-40);
       appendMessage('assistant', renderResult(result));
+
+      // Increment only on success
+      exchangeCount++;
+
+      if (exchangeCount >= MAX_EXCHANGES) {
+        showSessionBanner('Session limit reached. Please refresh the page to start a new session.', '#cc3333');
+        atLimit = true;
+      } else if (exchangeCount === MAX_EXCHANGES - 1) {
+        showSessionBanner('⚠ 1 message remaining in this session. Refresh to start a new session.', '#e67e00');
+      }
     } catch (err) {
       typingBubble.remove();
-      appendMessage('assistant', 'Something went wrong. Please try again.');
-      console.error(err);
+      if (err.name === 'AbortError') {
+        // User stopped — restore input so they can edit and resend
+        input.value = question;
+      } else {
+        appendMessage('assistant', 'Something went wrong. Please try again.');
+        console.error(err);
+      }
+    } finally {
+      currentAbort = null;
+      document.getElementById('stop-btn').style.display = 'none';
+      document.getElementById('send-btn').style.display = '';
     }
 
-    input.disabled = false;
-    sendBtn.disabled = false;
-    input.focus();
+    if (atLimit) {
+      input.disabled = true;
+      sendBtn.disabled = true;
+    } else {
+      input.disabled = false;
+      sendBtn.disabled = false;
+      input.focus();
+    }
+  }
+
+  function stopRequest() {
+    if (currentAbort) {
+      currentAbort.abort();
+    }
   }
 </script>
 

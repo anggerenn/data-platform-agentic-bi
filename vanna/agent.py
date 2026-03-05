@@ -93,9 +93,10 @@ Available tables:
 {_schema_context}
 
 Route questions as follows:
-- Data questions (counts, sums, trends, comparisons) → use explore_data tool
+- Data questions (counts, sums, trends, comparisons, rankings, breakdowns) → use explore_data tool
 - Definition or semantic questions (what does X mean, explain Y) → use answer_semantic tool
-- Ambiguous or unclear questions → use clarify tool
+- Everything else → use clarify tool: ambiguous questions, single words, numbers, gibberish,
+  conversational messages, opinions, reactions (e.g. "wow", "nice", "bad", "8", "ok", "test")
 
 Always call exactly one tool and return a ChatResponse with the correct intent.
 """,

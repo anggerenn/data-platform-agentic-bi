@@ -116,6 +116,46 @@ ORDER BY order_date
 """)
 
 vn.train(
+    question="Show me monthly revenue by city",
+    sql="""
+SELECT
+    toStartOfMonth(order_date) AS month_start,
+    city,
+    SUM(total_revenue) AS monthly_revenue
+FROM transformed_marts.daily_sales
+GROUP BY toStartOfMonth(order_date), city
+ORDER BY month_start, monthly_revenue DESC
+""")
+
+vn.train(
+    question="MTD revenue comparison: compare each month filtered to the same day-of-month as the latest date in the data",
+    sql="""
+SELECT
+    toStartOfMonth(order_date) AS month_start,
+    SUM(total_revenue) AS mtd_revenue
+FROM transformed_marts.daily_sales
+WHERE toDayOfMonth(order_date) <= toDayOfMonth(max(order_date) OVER ())
+GROUP BY toStartOfMonth(order_date)
+ORDER BY month_start
+""")
+
+vn.train(
+    question="Compare February and March revenue up to the same day (e.g. if March data goes to the 5th, filter February to day <= 5)",
+    sql="""
+SELECT
+    toStartOfMonth(order_date) AS month_start,
+    SUM(total_revenue) AS mtd_revenue
+FROM transformed_marts.daily_sales
+WHERE toDayOfMonth(order_date) <= (
+    SELECT toDayOfMonth(max(order_date))
+    FROM transformed_marts.daily_sales
+    WHERE toStartOfMonth(order_date) = toStartOfMonth(today())
+)
+GROUP BY toStartOfMonth(order_date)
+ORDER BY month_start
+""")
+
+vn.train(
     question="Which category had the most orders last month?",
     sql="""
 SELECT
@@ -156,17 +196,26 @@ vn.train(
 SELECT
     month,
     monthly_revenue,
-    LAG(monthly_revenue, 1) OVER (ORDER BY month) AS prev_month_revenue,
+    prev_month_revenue,
     round(
-        (monthly_revenue - LAG(monthly_revenue, 1) OVER (ORDER BY month))
-        / LAG(monthly_revenue, 1) OVER (ORDER BY month) * 100,
+        (monthly_revenue - prev_month_revenue)
+        / nullIf(prev_month_revenue, 0) * 100,
     2) AS growth_pct
 FROM (
     SELECT
-        toStartOfMonth(order_date) AS month,
-        SUM(total_revenue) AS monthly_revenue
-    FROM transformed_marts.daily_sales
-    GROUP BY month
+        month,
+        monthly_revenue,
+        lagInFrame(monthly_revenue, 1) OVER (
+            ORDER BY month
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) AS prev_month_revenue
+    FROM (
+        SELECT
+            toStartOfMonth(order_date) AS month,
+            SUM(total_revenue) AS monthly_revenue
+        FROM transformed_marts.daily_sales
+        GROUP BY toStartOfMonth(order_date)
+    ) monthly
 ) sub
 ORDER BY month
 """)
