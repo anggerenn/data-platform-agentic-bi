@@ -54,6 +54,27 @@ For order-level detail use transformed_staging.stg_orders.
 """)
 
 vn.train(documentation="""
+ClickHouse date rules — CRITICAL:
+- NEVER pass a string literal directly to a date function like toStartOfMonth('2024-03-01') — this will fail.
+- Always wrap string date literals with toDate(): toStartOfMonth(toDate('2024-03-01'))
+- For current month use: toStartOfMonth(today())
+- For previous month use: toStartOfMonth(today() - INTERVAL 1 MONTH)
+- For a specific named month (e.g. March 2026) use: toStartOfMonth(toDate('2026-03-01'))
+""")
+
+vn.train(documentation="""
+ClickHouse window function rules — CRITICAL, always follow these:
+- NEVER use LAG() or LEAD() — they do not exist in ClickHouse.
+- Always use lagInFrame() and leadInFrame() instead.
+- lagInFrame / leadInFrame REQUIRE a frame spec: ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+- Window functions cannot be mixed with GROUP BY in the same SELECT — always use a subquery.
+- Correct pattern:
+    SELECT ..., lagInFrame(col, 1) OVER (ORDER BY x ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS prev
+    FROM ( SELECT x, SUM(...) AS col FROM ... GROUP BY x ) sub
+- Safe division: use nullIf(denominator, 0) to avoid division by zero.
+""")
+
+vn.train(documentation="""
 Columns in transformed_marts.daily_sales:
 - order_date: the day sales occurred — stored as Date type. Use directly in date functions.
   Examples: toStartOfMonth(order_date), toYear(order_date), order_date >= '2024-01-01'
@@ -188,6 +209,30 @@ SELECT
 FROM transformed_marts.daily_sales
 GROUP BY category
 ORDER BY avg_order_value DESC
+""")
+
+vn.train(
+    question="Show me total revenue this month and month-over-month growth as a scorecard",
+    sql="""
+SELECT
+    month_start,
+    revenue,
+    prev_revenue,
+    round(
+        (revenue - prev_revenue) / nullIf(prev_revenue, 0) * 100,
+    2) AS growth_pct
+FROM (
+    SELECT
+        toStartOfMonth(order_date) AS month_start,
+        SUM(total_revenue) AS revenue,
+        lagInFrame(SUM(total_revenue), 1) OVER (
+            ORDER BY toStartOfMonth(order_date)
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) AS prev_revenue
+    FROM transformed_marts.daily_sales
+    GROUP BY toStartOfMonth(order_date)
+) sub
+WHERE month_start = toStartOfMonth(today())
 """)
 
 vn.train(

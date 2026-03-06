@@ -230,6 +230,7 @@ services:
     volumes:
       - ~/data:/data
       - ./dbt:/dbt:ro
+      - chroma_cache:/root/.cache/chroma
     ports:
       - "8084:8084"
     networks:
@@ -256,6 +257,7 @@ services:
 volumes:
   postgres_data:
   lightdash_db_data:
+  chroma_cache:
 
 networks:
   data-network:

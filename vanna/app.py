@@ -18,12 +18,22 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 
-from agent import AgentDeps, agent
+from agents.routing import AgentDeps, agent
 from agents.data_visualizer import get_chart_spec
 from vn import get_vanna
 
 flask_app = Flask(__name__)
 vn = get_vanna()
+
+# Warm up ChromaDB embedding model in background so the first user query is fast.
+# get_similar_question_sql() triggers ONNX model load without calling any external API.
+import threading
+def _warmup():
+    try:
+        vn.get_similar_question_sql("total revenue")
+    except Exception:
+        pass
+threading.Thread(target=_warmup, daemon=True).start()
 
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), 'static')
 _LIGHTDASH_URL = os.environ.get('LIGHTDASH_PUBLIC_URL', 'http://localhost:8080')
@@ -117,21 +127,25 @@ def chat():
     history = _get_session(session_id)
 
     try:
+        deps = AgentDeps(vanna=vn)
         result = asyncio.run(
-            agent.run(question, deps=AgentDeps(vanna=vn), message_history=history)
+            agent.run(question, deps=deps, message_history=history)
         )
         new_msgs = _strip_explore_rows(result.new_messages())
         sessions[session_id] = sessions.get(session_id, []) + new_msgs
 
         output = result.output.model_dump()
 
+        # Inject query results from deps — rows never passed through the LLM
+        rows = deps.result_rows
+        columns = deps.result_columns
+        output['data'] = rows
+        output['columns'] = columns
+        output['row_count'] = len(rows)
+
         # Enrich explore results with a server-side chart spec
-        if (
-            result.output.intent == 'explore'
-            and result.output.columns
-            and result.output.data
-        ):
-            spec = asyncio.run(get_chart_spec(result.output.columns, result.output.data))
+        if result.output.intent == 'explore' and columns and rows:
+            spec = asyncio.run(get_chart_spec(columns, rows, question=question))
             output['chart_spec'] = spec.model_dump()
         else:
             output['chart_spec'] = None
