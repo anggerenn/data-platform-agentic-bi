@@ -108,6 +108,7 @@ One clear sentence is enough — avoid paragraphs.
 2. **Review Every File:** Before creating or modifying any file, show me the full content or a diff and explain why the change is necessary — I need time to review before committing to git
 3. **One Task at a Time:** Complete exactly ONE sub-task from `tasklist.md`, update `progress.md`, then STOP — do not start the next task until I say so
 4. **Resource Awareness:** If a task involves a new Docker container, state the estimated RAM usage before proceeding
+5. **Commit Often:** After completing a feature or fix, stage and commit relevant files with a descriptive message. Do not let untracked/modified files accumulate across sessions.
 
 ## Deferred / Backlog
 - Wren AI (revisit at v2 if text-to-SQL accuracy becomes a concern)

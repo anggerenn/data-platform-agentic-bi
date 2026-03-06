@@ -20,6 +20,7 @@ from pydantic_ai.messages import (
 from agents.planner import run_dpm, PRD
 from agents.builder import run_data_modeler
 from agents.lightdash import create_dashboard
+from agents.housekeeper import check as housekeeper_check
 
 from agents.router import AgentDeps, agent
 from agents.designer import get_chart_spec
@@ -257,13 +258,33 @@ def dashboard_build():
 
     try:
         prd = PRD(**prd_data)
+
+        # Dashboard police: check for existing dashboards with same/overlapping narrative
+        verdict = housekeeper_check(prd)
+        if verdict.verdict == 'full':
+            return jsonify({
+                'police': 'full',
+                'url': verdict.matched_dashboard_url,
+                'message': f"A dashboard already covers this: **{verdict.matched_dashboard_name}**. {verdict.reason}",
+            })
+        if verdict.verdict == 'partial':
+            # Surface the overlap but let user decide — build proceeds, we flag it
+            overlap_info = {
+                'police': 'partial',
+                'existing_url': verdict.matched_dashboard_url,
+                'existing_name': verdict.matched_dashboard_name,
+                'reason': verdict.reason,
+            }
+        else:
+            overlap_info = {}
+
         model_result = asyncio.run(run_data_modeler(prd, _DBT_PATH))
 
         if model_result.needs_new_model:
             return jsonify({"needs_new_model": True, "error": "No existing model covers these metrics."})
 
         dashboard_result = create_dashboard(prd, model_result)
-        return jsonify({**model_result.model_dump(), **dashboard_result})
+        return jsonify({**model_result.model_dump(), **dashboard_result, **overlap_info})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
