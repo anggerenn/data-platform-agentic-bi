@@ -14,3 +14,10 @@ deployments:
     schedule: null
     work_pool:
       name: default-pool
+
+  - name: lightdash-sync
+    entrypoint: prefect/flows/lightdash_sync.py:lightdash_sync
+    schedule:
+      interval: 900  # every 15 minutes
+    work_pool:
+      name: default-pool
