@@ -195,7 +195,58 @@ def _jaccard(a: set, b: set) -> float:
     return len(a & b) / len(a | b)
 
 
-# ── LLM: resolve ambiguous zone ───────────────────────────────────────────────
+# ── ChromaDB: resolve ambiguous zone ──────────────────────────────────────────
+
+_PRD_DOC_PREFIX = "Dashboard: '"
+
+
+def _extract_dashboard_name(doc: str) -> Optional[str]:
+    """Extract dashboard name from a PRD documentation string."""
+    m = re.match(r"Dashboard: '([^']+)'", doc)
+    return m.group(1) if m else None
+
+
+def _chromadb_disambiguate(prd, best: dict, score: float, vn) -> Optional[HousekeeperVerdict]:
+    """Use ChromaDB semantic similarity to resolve the ambiguous Jaccard zone.
+
+    Queries the documentation collection for PRD docs similar to the new PRD.
+    If a stored PRD doc for the best-matching dashboard is returned, the
+    semantic overlap is confirmed and we return a verdict without calling the LLM.
+    """
+    try:
+        prd_summary = (
+            f"Dashboard objective: {prd.objective}. "
+            f"Audience: {prd.audience}. "
+            f"Metrics: {', '.join(prd.metrics)}."
+        )
+        related = vn.get_related_documentation(prd_summary)
+        for doc in related[:5]:
+            name = _extract_dashboard_name(doc)
+            if name and name.lower() == best['name'].lower():
+                new_metrics = _keywords(' '.join(prd.metrics)) - best['keywords']
+                sub = 'partial_covered' if not new_metrics else 'partial_uncovered'
+                if sub == 'partial_covered':
+                    reason = (
+                        f"Semantic match confirmed with '{best['name']}' ({score:.0%} metric overlap). "
+                        f"Your metrics are already covered — view it instead of creating a new one."
+                    )
+                else:
+                    reason = (
+                        f"Semantic match confirmed with '{best['name']}' ({score:.0%} metric overlap). "
+                        f"New metrics {sorted(new_metrics)} not yet covered — consider polishing that dashboard."
+                    )
+                return HousekeeperVerdict(
+                    verdict=sub,
+                    matched_dashboard_name=best['name'],
+                    matched_dashboard_url=best['url'],
+                    reason=reason,
+                )
+    except Exception:
+        pass
+    return None
+
+
+# ── LLM: fallback for ambiguous zone ──────────────────────────────────────────
 
 class _LLMVerdict(BaseModel):
     verdict: Literal['full', 'partial_covered', 'partial_uncovered', 'none']
@@ -232,7 +283,7 @@ async def _llm_disambiguate(prd, existing: dict, score: float) -> _LLMVerdict:
 
 # ── Public entry point (sync) ──────────────────────────────────────────────────
 
-def check(prd) -> HousekeeperVerdict:
+def check(prd, vn=None) -> HousekeeperVerdict:
     fingerprints = _build_fingerprints(_DBT_PATH)
     if not fingerprints:
         return HousekeeperVerdict(verdict='none', reason='No existing dashboards to compare.')
@@ -254,12 +305,15 @@ def check(prd) -> HousekeeperVerdict:
         )
 
     if score >= _PARTIAL_THRESHOLD:
-        # Determine sub-verdict: covered (PRD ⊆ existing) vs uncovered (PRD has new metrics)
         new_metrics = prd_kws - best['keywords']
         sub_verdict = 'partial_covered' if not new_metrics else 'partial_uncovered'
 
-        # Ambiguous zone: use LLM to verify narrative context
+        # Ambiguous zone: try ChromaDB first, fall back to LLM
         if _AMBIGUOUS_LOW <= score <= _AMBIGUOUS_HIGH:
+            if vn is not None:
+                verdict = _chromadb_disambiguate(prd, best, score, vn)
+                if verdict:
+                    return verdict
             try:
                 llm = asyncio.run(_llm_disambiguate(prd, best, score))
                 return HousekeeperVerdict(

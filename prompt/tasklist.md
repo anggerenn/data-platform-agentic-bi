@@ -70,20 +70,40 @@ After exploring with Vanna, user clicks "Save Dashboard". Three agents collabora
 ### Deploy + version control
 - [x] Write `.yml` directly → upload (fast, ~45s)
 - [ ] Background git commit after deploy succeeds (version history without blocking UX)
+- [x] Housekeeper agent: Jaccard similarity on dbt YAML metric fingerprints; advisory-only (never blocks); verdicts: full / partial_covered / partial_uncovered / none
+- [x] Instructor agent: generates overview, use-case questions, tips from PRD; embedded as markdown tile in README.md tab of every dashboard
+- [x] Storyteller: dropped LLM, fully deterministic layout (users reorder in Lightdash)
+- [x] Dashboard cleanup: removed 3 duplicate dashboards, kept City Revenue Performance Dashboard
+- [x] README.md tab added to City Revenue Performance Dashboard with instructor guide
 
 ---
 
-## Up Next — Semantic Layer (MetricFlow + Vanna)
+## Up Next — Replace ChromaDB with zvec + BM25
 
 ### Overview
-Use MetricFlow YAML format to define canonical metrics (MRR, churn, revenue).
-Parse definitions to auto-generate Vanna training data — no manual train.py updates needed.
+Vanna container uses ~335MB RAM, almost entirely the ChromaDB ONNX embedding model.
+Replace with zvec (sparse/BM25 vector store) — no embedding model needed, ~60MB target.
 
-- [ ] Define key metrics in `dbt/models/metrics/` using MetricFlow YAML format
-- [ ] Build parser: MetricFlow `.yml` → Vanna training pairs (question + SQL)
-- [ ] Auto-update `build_schema_context()` to include metric definitions
-- [ ] Integrate parser into `train.py` — metrics become part of ChromaDB on retrain
-- [ ] Document metric naming conventions for client onboarding
+- [ ] Implement `vanna/vec.py` — custom `VannaLite` class (same interface: generate_sql, run_sql, train, get_related_documentation)
+  - BM25 sparse vectors via zvec (no neural embeddings, no API calls)
+  - Persistent storage at `/data/vanna-zvec/`
+  - State-aware: load existing index on startup
+- [ ] Update `vanna/vn.py` to use `VannaLite` instead of `MyVanna(ChromaDB_VectorStore, OpenAI_Chat)`
+- [ ] Remove `vanna` package from `docker/Dockerfile.vanna`, add `zvec` + `rank-bm25`
+- [ ] Migrate existing ChromaDB training data to zvec index
+- [ ] Rebuild + smoke test: `docker-compose up -d --build vanna`
+
+## Completed — Semantic Layer
+
+- [x] Enriched `dbt/models/marts/schema.yml` with full dimension/metric metadata
+- [x] `vanna/train_from_schema.py` — hash-based incremental trainer (Q&A pairs + docs + PRD docs)
+- [x] `dbt/validate_schema.py` — convention enforcer with approved groups list
+- [x] `prefect/flows/vanna_retrain.py` — dedicated flow with validate + retrain tasks
+- [x] `.github/workflows/validate-schema.yml` — CI gate on schema changes
+- [x] `.github/workflows/deploy-lightdash.yml` — upload on merge to main
+- [x] Housekeeper: ChromaDB semantic search replaces LLM in ambiguous zone
+- [x] SSE streaming: `/chat/stream` with word-by-word text tokens
+- [x] SQL cache: repeated questions skip LLM SQL generation
 
 ---
 

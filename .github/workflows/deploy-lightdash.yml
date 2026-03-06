@@ -1,0 +1,31 @@
+name: Deploy Lightdash Dashboards
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'dbt/lightdash/**'
+  workflow_dispatch:
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Lightdash CLI
+        run: npm install -g @lightdash/cli
+
+      - name: Login to Lightdash
+        run: lightdash login ${{ secrets.LIGHTDASH_URL }} --token ${{ secrets.LIGHTDASH_API_KEY }}
+
+      - name: Upload dashboards
+        run: lightdash upload --force --path dbt/lightdash --include-charts

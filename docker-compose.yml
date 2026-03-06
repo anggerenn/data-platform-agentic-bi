@@ -148,6 +148,7 @@ services:
       - S3_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
       - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
       - S3_FORCE_PATH_STYLE=true
+      - NODE_OPTIONS=--max-old-space-size=640
     volumes:
       - ./dbt:/usr/app/dbt
     networks:

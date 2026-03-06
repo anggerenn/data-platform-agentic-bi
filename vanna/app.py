@@ -2,10 +2,12 @@ import asyncio
 import dataclasses
 import json
 import os
+import queue
+import threading
 import uuid
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request
+from flask import Flask, Response, jsonify, request, stream_with_context
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
 
@@ -52,6 +54,10 @@ sessions: dict[str, list[ModelMessage]] = {}
 
 # DPM session store: dpm_session_id → {summary, history}
 dpm_sessions: dict[str, dict] = {}
+
+# SQL cache: normalized question → sql string
+# Skips generate_sql() LLM call on repeated questions
+_sql_cache: dict[str, str] = {}
 
 
 def _strip_explore_rows(messages: list[ModelMessage]) -> list[ModelMessage]:
@@ -123,6 +129,71 @@ def index():
     with open(os.path.join(_STATIC_DIR, 'index.html')) as f:
         html = f.read()
     return html, 200, {'Content-Type': 'text/html'}
+
+
+@flask_app.route('/chat/stream', methods=['POST'])
+def chat_stream():
+    body = request.get_json()
+    question = (body.get('message') or '').strip()
+    if not question:
+        return jsonify({"error": "message required"}), 400
+
+    session_id = body.get('session_id') or str(uuid.uuid4())
+    history = _get_session(session_id)
+
+    def generate():
+        q = queue.Queue()
+
+        async def _run():
+            try:
+                deps = AgentDeps(vanna=vn, sql_cache=_sql_cache)
+                async with agent.run_stream(question, deps=deps, message_history=history) as result:
+                    async for delta in result.stream_text(delta=True):
+                        q.put(('text', delta))
+                    output = result.output
+                    new_msgs = _strip_explore_rows(result.new_messages())
+
+                rows = deps.result_rows
+                columns = deps.result_columns
+                chart_spec = None
+                if output.intent == 'explore' and columns and rows:
+                    spec = await get_chart_spec(columns, rows, question=question)
+                    chart_spec = spec.model_dump()
+
+                result_data = {
+                    **output.model_dump(),
+                    'data': rows,
+                    'columns': columns,
+                    'row_count': len(rows),
+                    'chart_spec': chart_spec,
+                    'session_id': session_id,
+                }
+                q.put(('output', result_data, new_msgs))
+            except Exception as e:
+                q.put(('error', str(e)))
+
+        threading.Thread(target=lambda: asyncio.run(_run()), daemon=True).start()
+
+        yield f"data: {json.dumps({'type': 'status', 'message': 'Thinking\u2026'})}\n\n"
+
+        while True:
+            item = q.get()
+            if item[0] == 'text':
+                yield f"data: {json.dumps({'type': 'text', 'content': item[1]})}\n\n"
+            elif item[0] == 'output':
+                _, result_data, new_msgs = item
+                sessions[session_id] = sessions.get(session_id, []) + new_msgs
+                yield f"data: {json.dumps({'type': 'result', **result_data})}\n\n"
+                break
+            elif item[0] == 'error':
+                yield f"data: {json.dumps({'type': 'error', 'message': item[1], 'session_id': session_id})}\n\n"
+                break
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={'X-Accel-Buffering': 'no', 'Cache-Control': 'no-cache'},
+    )
 
 
 @flask_app.route('/chat', methods=['POST'])
@@ -261,7 +332,7 @@ def dashboard_build():
         prd = PRD(**prd_data)
 
         # Housekeeper: advisory only — never blocks, user is the decision maker
-        verdict = housekeeper_check(prd)
+        verdict = housekeeper_check(prd, vn)
         if verdict.verdict != 'none':
             housekeeper_info = {
                 'housekeeper': verdict.verdict,
@@ -305,6 +376,19 @@ def dashboard_build():
                 pass
 
         return jsonify({**model_result.model_dump(), **dashboard_result, **housekeeper_info, 'guide': guide_info})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@flask_app.route('/retrain/schema', methods=['POST'])
+def retrain_schema():
+    """Re-parse dbt schema.yml and add new training pairs to ChromaDB.
+    Called by the Prefect pipeline after dbt run.
+    """
+    try:
+        from train_from_schema import retrain
+        stats = retrain(vn)
+        return jsonify({"status": "ok", **stats})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

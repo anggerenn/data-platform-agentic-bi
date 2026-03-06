@@ -631,20 +631,13 @@ async function sendMessage() {
   appendMessage('user', question);
   const typingBubble = showTyping();
 
-  const slowHintTimer = setTimeout(() => {
-    slowHintEl = document.createElement('div');
-    slowHintEl.style.cssText = 'font-size:11px;color:#aaa;text-align:center;padding:2px 0 4px;';
-    slowHintEl.textContent = 'Taking longer than usual — hang tight...';
-    typingBubble.insertAdjacentElement('afterend', slowHintEl);
-    scrollToBottom();
-  }, 8000);
-
   currentAbort = new AbortController();
-  let slowHintEl = null;
+  let streamingText = '';
+  let streamingTextEl = null;
   let atLimit = false;
 
   try {
-    const resp = await fetch('chat', {
+    const resp = await fetch('chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: question, session_id: sessionId }),
@@ -652,31 +645,64 @@ async function sendMessage() {
     });
 
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const result = await resp.json();
 
-    typingBubble.remove();
-    sessionId = result.session_id;
-    const bubble = appendMessage('assistant', renderResult(result));
-    requestAnimationFrame(() => {
-      bubble.querySelectorAll('.chart-wrap').forEach(el => Plotly.Plots.resize(el));
-    });
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
 
-    // Show/hide Save Dashboard button (fixed position, top-right of panel)
-    const saveBar = document.getElementById('save-bar');
-    const saveDashBtn = document.getElementById('save-dashboard-btn');
-    if (!isDashboardMode && result.intent === 'explore' && result.data && result.data.length > 0) {
-      saveBar.classList.add('visible');
-      saveDashBtn.disabled = false;
-      saveDashBtn.textContent = 'Save as Dashboard';
-    }
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    exchangeCount++;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
 
-    if (exchangeCount >= MAX_EXCHANGES) {
-      showSessionBanner('Session limit reached. Please refresh the page to start a new session.', '#cc3333');
-      atLimit = true;
-    } else if (exchangeCount === MAX_EXCHANGES - 1) {
-      showSessionBanner('⚠ 1 message remaining in this session. Refresh to start a new session.', '#e67e00');
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        let event;
+        try { event = JSON.parse(line.slice(6)); } catch { continue; }
+
+        if (event.type === 'text') {
+          // First text chunk: replace typing dots with streaming text
+          if (!streamingTextEl) {
+            typingBubble.innerHTML = '';
+            streamingTextEl = document.createElement('div');
+            typingBubble.appendChild(streamingTextEl);
+          }
+          streamingText += event.content;
+          streamingTextEl.innerHTML = md(streamingText);
+          scrollToBottom();
+
+        } else if (event.type === 'result') {
+          typingBubble.remove();
+          sessionId = event.session_id;
+          const bubble = appendMessage('assistant', renderResult(event));
+          requestAnimationFrame(() => {
+            bubble.querySelectorAll('.chart-wrap').forEach(el => Plotly.Plots.resize(el));
+          });
+
+          const saveBar = document.getElementById('save-bar');
+          const saveDashBtn = document.getElementById('save-dashboard-btn');
+          if (!isDashboardMode && event.intent === 'explore' && event.data && event.data.length > 0) {
+            saveBar.classList.add('visible');
+            saveDashBtn.disabled = false;
+            saveDashBtn.textContent = 'Save as Dashboard';
+          }
+
+          exchangeCount++;
+          if (exchangeCount >= MAX_EXCHANGES) {
+            showSessionBanner('Session limit reached. Please refresh the page to start a new session.', '#cc3333');
+            atLimit = true;
+          } else if (exchangeCount === MAX_EXCHANGES - 1) {
+            showSessionBanner('⚠ 1 message remaining in this session. Refresh to start a new session.', '#e67e00');
+          }
+
+        } else if (event.type === 'error') {
+          typingBubble.remove();
+          appendMessage('assistant', `Something went wrong: ${event.message}`);
+        }
+      }
     }
   } catch (err) {
     typingBubble.remove();
@@ -687,8 +713,6 @@ async function sendMessage() {
       console.error(err);
     }
   } finally {
-    clearTimeout(slowHintTimer);
-    if (slowHintEl) { slowHintEl.remove(); slowHintEl = null; }
     currentAbort = null;
     document.getElementById('stop-btn').style.display = 'none';
     document.getElementById('send-btn').style.display = '';
