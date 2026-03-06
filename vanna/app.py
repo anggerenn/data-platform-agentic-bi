@@ -267,10 +267,17 @@ def dashboard_build():
                 'url': verdict.matched_dashboard_url,
                 'message': f"A dashboard already covers this: **{verdict.matched_dashboard_name}**. {verdict.reason}",
             })
-        if verdict.verdict == 'partial':
-            # Surface the overlap but let user decide — build proceeds, we flag it
+        if verdict.verdict == 'partial_covered':
+            # PRD metrics already covered — redirect like full, but softer message
+            return jsonify({
+                'police': 'partial_covered',
+                'url': verdict.matched_dashboard_url,
+                'message': f"Your metrics are already in **{verdict.matched_dashboard_name}**. {verdict.reason}",
+            })
+        if verdict.verdict == 'partial_uncovered':
+            # PRD has new metrics — build proceeds but flag the overlap
             overlap_info = {
-                'police': 'partial',
+                'police': 'partial_uncovered',
                 'existing_url': verdict.matched_dashboard_url,
                 'existing_name': verdict.matched_dashboard_name,
                 'reason': verdict.reason,

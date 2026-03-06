@@ -6,9 +6,10 @@ Flow:
   3. Function normalises metric field IDs and PRD metric text into keyword sets
   4. Function computes Jaccard similarity between new PRD and each existing dashboard
   5. Verdict:
-       full    (score >= 0.8) → redirect to existing dashboard
-       partial (score >= 0.4) → flag overlap, proceed with new build
-       none    (score  < 0.4) → no overlap, build freely
+       full             (score >= 0.8) → redirect to existing dashboard
+       partial_covered  (score >= 0.4, prd ⊆ existing) → existing covers PRD → redirect
+       partial_uncovered(score >= 0.4, prd ⊄ existing) → PRD has new metrics → polish existing
+       none             (score  < 0.4) → no overlap, build freely
   6. LLM only called for the ambiguous zone (0.5–0.7) to check narrative context
 """
 import asyncio
@@ -33,7 +34,7 @@ _AMBIGUOUS_HIGH = 0.7
 # ── Result type ────────────────────────────────────────────────────────────────
 
 class HousekeeperVerdict(BaseModel):
-    verdict: Literal['full', 'partial', 'none']
+    verdict: Literal['full', 'partial_covered', 'partial_uncovered', 'none']
     matched_dashboard_name: Optional[str] = None
     matched_dashboard_url: Optional[str] = None
     reason: str
@@ -137,7 +138,7 @@ def _jaccard(a: set, b: set) -> float:
 # ── LLM: resolve ambiguous zone ───────────────────────────────────────────────
 
 class _LLMVerdict(BaseModel):
-    verdict: Literal['full', 'partial', 'none']
+    verdict: Literal['full', 'partial_covered', 'partial_uncovered', 'none']
     reason: str
 
 
@@ -146,15 +147,16 @@ _agent = Agent(
     output_type=_LLMVerdict,
     instructions="""You are a dashboard governance assistant.
 
-Metric similarity has already been computed. Your job is to check whether
-the narratives are truly the same (not just sharing metrics).
+Metric similarity and subset analysis have already been computed.
+Your job is to check whether the narratives are truly the same.
 
-  full    — same objective + same audience + same metric cut → duplicate, redirect
-  partial — overlapping metrics but different objective or different cut → flag, proceed
-  none    — metric overlap is coincidental, narratives are unrelated
+  full              — same objective + same audience + same metric cut → duplicate, redirect
+  partial_covered   — PRD metrics are covered by existing dashboard; existing already serves this need → redirect
+  partial_uncovered — PRD has additional metrics not in existing; build new but suggest polishing existing
+  none              — metric overlap is coincidental, narratives are unrelated
 
 Be conservative with "full". Different audience or different dimensional cut
-(e.g. one is city-level, other is category-level) is "partial" not "full".""",
+(e.g. one is city-level, other is category-level) is "partial_uncovered" not "full".""",
 )
 
 
@@ -192,7 +194,11 @@ def check(prd) -> HousekeeperVerdict:
         )
 
     if score >= _PARTIAL_THRESHOLD:
-        # Ambiguous zone: use LLM to check narrative context
+        # Determine sub-verdict: covered (PRD ⊆ existing) vs uncovered (PRD has new metrics)
+        new_metrics = prd_kws - best['keywords']
+        sub_verdict = 'partial_covered' if not new_metrics else 'partial_uncovered'
+
+        # Ambiguous zone: use LLM to verify narrative context
         if _AMBIGUOUS_LOW <= score <= _AMBIGUOUS_HIGH:
             try:
                 llm = asyncio.run(_llm_disambiguate(prd, best, score))
@@ -204,11 +210,19 @@ def check(prd) -> HousekeeperVerdict:
                 )
             except Exception:
                 pass
+
+        if sub_verdict == 'partial_covered':
+            return HousekeeperVerdict(
+                verdict='partial_covered',
+                matched_dashboard_name=best['name'],
+                matched_dashboard_url=best['url'],
+                reason=f"Your metrics are already covered ({score:.0%} overlap) by '{best['name']}' — view it instead of creating a new one.",
+            )
         return HousekeeperVerdict(
-            verdict='partial',
+            verdict='partial_uncovered',
             matched_dashboard_name=best['name'],
             matched_dashboard_url=best['url'],
-            reason=f"Metric overlap {score:.0%} with '{best['name']}' — consider extending it instead.",
+            reason=f"Metric overlap {score:.0%} with '{best['name']}'. New metrics {sorted(new_metrics)} not yet covered — consider polishing that dashboard instead of starting fresh.",
         )
 
     return HousekeeperVerdict(
