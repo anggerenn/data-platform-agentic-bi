@@ -11,6 +11,7 @@ Flow:
 """
 import os
 import re
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -186,7 +187,15 @@ def _generate_content_files(prd, model_name: str, chart_specs: list[dict], posit
         }
         files.append((f'charts/{slug}.yml', _dump(chart_doc)))
 
-    # Dashboard file — tiles positioned by storyteller
+    # Two tabs: charts in "Dashboard", guide in "README.md"
+    tab_dashboard_uuid = str(uuid.uuid4())
+    tab_readme_uuid = str(uuid.uuid4())
+    tabs = [
+        {'uuid': tab_dashboard_uuid, 'name': 'Dashboard', 'order': 0},
+        {'uuid': tab_readme_uuid,    'name': 'README.md', 'order': 1},
+    ]
+
+    # Chart tiles — all assigned to the Dashboard tab
     pos_map = {p['name']: p for p in positioned}
     tiles = [
         {
@@ -194,7 +203,7 @@ def _generate_content_files(prd, model_name: str, chart_specs: list[dict], posit
             'y': pos_map[spec['name']]['y'],
             'w': pos_map[spec['name']]['w'],
             'h': pos_map[spec['name']]['h'],
-            'tabUuid': None,
+            'tabUuid': tab_dashboard_uuid,
             'type': 'saved_chart',
             'properties': {
                 'title': '',
@@ -207,9 +216,9 @@ def _generate_content_files(prd, model_name: str, chart_specs: list[dict], posit
         for spec in chart_specs
         if spec['name'] in pos_map
     ]
-    # Markdown guide tile — pinned at the bottom of the dashboard
+
+    # Markdown guide tile — lives in the README.md tab
     if guide:
-        bottom_y = max((t['y'] + t['h'] for t in tiles), default=0)
         use_cases_md = '\n'.join(f'- {u}' for u in (guide.use_cases or []))
         tips_md = '\n'.join(f'- {t}' for t in (guide.tips or []))
         content = f"## Overview\n{guide.overview}"
@@ -219,10 +228,10 @@ def _generate_content_files(prd, model_name: str, chart_specs: list[dict], posit
             content += f"\n\n## Tips\n{tips_md}"
         tiles.append({
             'x': 0,
-            'y': bottom_y,
+            'y': 0,
             'w': 36,
-            'h': 4,
-            'tabUuid': None,
+            'h': 12,
+            'tabUuid': tab_readme_uuid,
             'type': 'markdown',
             'properties': {
                 'title': 'How to use this dashboard',
@@ -239,7 +248,7 @@ def _generate_content_files(prd, model_name: str, chart_specs: list[dict], posit
         'updatedAt': now,
         'tiles': tiles,
         'filters': {'metrics': [], 'dimensions': [], 'tableCalculations': []},
-        'tabs': [],
+        'tabs': tabs,
         'slug': dashboard_slug,
         'spaceSlug': 'home',
         'version': 1,
