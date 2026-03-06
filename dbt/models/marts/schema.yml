@@ -6,30 +6,60 @@ models:
       canonical: true
     description: "Aggregated daily sales by date, category and city"
     columns:
+
       - name: order_date
-        description: "Date of the order (Date type — inherited from stg_orders cast)"
+        description: "Date of the order"
         tests:
           - not_null
+        meta:
+          dimension:
+            type: date
+            label: "Order Date"
+            description: "The date the order was placed. Use for time-series and trend analysis."
+            groups: ["Time"]
+
       - name: category
         description: "Product category"
         tests:
           - not_null
+        meta:
+          dimension:
+            type: string
+            label: "Category"
+            description: "Product category (e.g. Electronics, Clothing). Use to break down performance by product type."
+            groups: ["Product"]
+
       - name: city
         description: "City of the order"
+        meta:
+          dimension:
+            type: string
+            label: "City"
+            description: "City where the order was placed. Use to analyse regional performance."
+            groups: ["Geography"]
+
       - name: order_count
         description: "Number of distinct orders"
         meta:
           metrics:
             order_count_sum:
               type: sum
-              label: "Order Count"
+              label: "Total Orders"
+              description: "Total number of orders placed. Use to measure demand volume."
+              groups: ["Orders"]
+              round: 0
+
       - name: customer_count
         description: "Number of distinct customers"
         meta:
           metrics:
             customer_count_sum:
               type: sum
-              label: "Customer Count"
+              label: "Total Customers"
+              description: "Total number of unique customers. Use to track reach and acquisition."
+              groups: ["Customers"]
+              round: 0
+
       - name: units_sold
         description: "Total units sold"
         meta:
@@ -37,17 +67,52 @@ models:
             units_sold_sum:
               type: sum
               label: "Units Sold"
+              description: "Total product units sold. Use alongside revenue to understand basket size."
+              groups: ["Orders"]
+              round: 0
+
       - name: revenue
-        description: "Sum of order amounts"
+        description: "Sum of order amounts (unit price only)"
         meta:
           metrics:
             revenue_sum:
               type: sum
-              label: "Revenue"
+              label: "Revenue (Unit Price)"
+              description: "Sum of unit prices only, excluding quantity. Prefer total_revenue for sales analysis."
+              groups: ["Revenue"]
+              round: 2
+
       - name: total_revenue
-        description: "Sum of amount * quantity — use this for revenue analysis"
+        description: "Sum of amount * quantity — primary revenue metric"
         meta:
           metrics:
             total_revenue_sum:
               type: sum
               label: "Total Revenue"
+              description: "Primary revenue metric: unit price × quantity summed. Use this for all revenue analysis."
+              groups: ["Revenue"]
+              round: 2
+
+            average_order_value:
+              type: number
+              label: "Average Order Value"
+              description: "Total revenue divided by total orders. Measures spend per transaction."
+              groups: ["Revenue"]
+              sql: "${total_revenue_sum} / NULLIF(${order_count_sum}, 0)"
+              round: 2
+
+            revenue_per_customer:
+              type: number
+              label: "Revenue per Customer"
+              description: "Total revenue divided by unique customers. Measures customer spend efficiency."
+              groups: ["Revenue", "Customers"]
+              sql: "${total_revenue_sum} / NULLIF(${customer_count_sum}, 0)"
+              round: 2
+
+            units_per_order:
+              type: number
+              label: "Units per Order"
+              description: "Average units per order. Indicates basket size."
+              groups: ["Orders"]
+              sql: "${units_sold_sum} / NULLIF(${order_count_sum}, 0)"
+              round: 1
