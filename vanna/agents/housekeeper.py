@@ -71,8 +71,6 @@ def _fetch_api_fingerprints() -> list:
     fingerprints = []
     for d in dashboards:
         name = d['name']
-        if name.startswith('[WIP]'):
-            continue  # exploratory dashboards — not subject to governance
         url  = f"{public}/projects/{project_uuid}/dashboards/{d['uuid']}/view"
         try:
             tiles = requests.get(
@@ -125,15 +123,30 @@ def _keywords(text: str) -> set:
     return {w for w in words if len(w) > 2 and w not in _STOPWORDS}
 
 
+def _slugify(name: str) -> str:
+    return re.sub(r'[^a-z0-9]+', '_', name.lower()).strip('_')
+
+
+def _has_prd(dbt_path: str, name: str) -> bool:
+    path = os.path.join(dbt_path, 'lightdash', 'prd', f'{_slugify(name)}.json')
+    return os.path.exists(path)
+
+
 def _build_fingerprints(dbt_path: str) -> list:
     """Merge API fingerprints (all dashboards) with YAML fingerprints (undeployed).
 
-    API is the authoritative source — covers both UI-created and YAML-created
-    dashboards. YAML-only dashboards (written but not yet deployed) are added
-    as a fallback so the housekeeper still catches them pre-deploy.
+    Governance rules (applied to API dashboards):
+      - [WIP]-prefixed dashboards are always excluded (exploratory, no governance)
+      - Dashboards without a PRD file are treated as implicitly WIP and excluded
+
+    API is the authoritative source. YAML-only dashboards (written but not yet
+    deployed) are added as a fallback so the housekeeper catches them pre-deploy.
     """
-    # Primary: pull everything from Lightdash API
-    api_fps = _fetch_api_fingerprints()
+    # Primary: pull everything from Lightdash API, apply governance filter
+    api_fps = [
+        fp for fp in _fetch_api_fingerprints()
+        if not fp['name'].startswith('[WIP]') and _has_prd(dbt_path, fp['name'])
+    ]
     api_names = {fp['name'] for fp in api_fps}
 
     # Fallback: read YAML files for anything not yet in Lightdash
@@ -165,6 +178,8 @@ def _build_fingerprints(dbt_path: str) -> list:
             name = doc.get('name', fn[:-4])
             if name in api_names:
                 continue  # already covered by API
+            if name.startswith('[WIP]') or not _has_prd(dbt_path, name):
+                continue  # no PRD → implicitly WIP
             all_kws: set = set()
             for tile in doc.get('tiles', []):
                 slug = tile.get('properties', {}).get('chartSlug', '')
