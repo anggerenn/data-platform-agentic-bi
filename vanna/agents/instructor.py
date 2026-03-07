@@ -39,7 +39,7 @@ async def _run(prd) -> DashboardGuide:
         f"Objective: {prd.objective}\n"
         f"Audience: {prd.audience}\n"
         f"Metrics: {', '.join(prd.metrics)}\n"
-        f"Filters: {', '.join(prd.filters) if prd.filters else 'none'}"
+        f"Action items: {', '.join(prd.action_items) if prd.action_items else 'none'}"
     )
     result = await _agent.run(prompt)
     return result.output

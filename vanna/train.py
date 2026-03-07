@@ -214,6 +214,45 @@ ORDER BY total_customers DESC
 """)
 
 vn.train(
+    question="Show me total unique customers in march 2026",
+    sql="""
+SELECT
+    SUM(customer_count) AS total_customers
+FROM transformed_marts.daily_sales
+WHERE order_date >= '2026-03-01' AND order_date < '2026-04-01'
+""")
+
+vn.train(
+    question="How many total units were sold in march 2026?",
+    sql="""
+SELECT
+    SUM(units_sold) AS total_units_sold
+FROM transformed_marts.daily_sales
+WHERE order_date >= '2026-03-01' AND order_date < '2026-04-01'
+""")
+
+vn.train(
+    question="Show me units sold by category",
+    sql="""
+SELECT
+    category,
+    SUM(units_sold) AS total_units_sold
+FROM transformed_marts.daily_sales
+GROUP BY category
+ORDER BY total_units_sold DESC
+""")
+
+vn.train(
+    question="What is the total order count last month?",
+    sql="""
+SELECT
+    SUM(order_count) AS total_orders
+FROM transformed_marts.daily_sales
+WHERE order_date >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '1 month'
+  AND order_date <  DATE_TRUNC('month', CURRENT_DATE)
+""")
+
+vn.train(
     question="What is the average order value by category?",
     sql="""
 SELECT

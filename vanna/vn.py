@@ -1,4 +1,5 @@
 import os
+from decimal import Decimal
 
 import pandas as pd
 import psycopg2
@@ -79,7 +80,13 @@ class VannaLite:
             cur.execute(sql)
             columns = [desc[0] for desc in cur.description]
             rows = cur.fetchall()
-        return pd.DataFrame(rows, columns=columns)
+        # Convert Decimal → float (psycopg2 maps PostgreSQL NUMERIC/SUM(BIGINT) to Decimal,
+        # which is not JSON-serializable)
+        clean_rows = [
+            tuple(float(v) if isinstance(v, Decimal) else v for v in row)
+            for row in rows
+        ]
+        return pd.DataFrame(clean_rows, columns=columns)
 
     def get_related_documentation(self, query: str) -> list:
         return self._store.get_related_documentation(query)
