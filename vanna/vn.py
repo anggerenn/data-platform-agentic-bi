@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import pandas as pd
 import psycopg2
-from openai import OpenAI as OpenAIClient
+from openai import OpenAI as OpenAIClient, APIError
 from vanna.legacy.chromadb import ChromaDB_VectorStore
 from vanna.legacy.openai import OpenAI_Chat
 
@@ -25,9 +25,11 @@ Rules:
 
 
 class VannaAI(ChromaDB_VectorStore, OpenAI_Chat):
-    def __init__(self, client=None, config=None):
+    def __init__(self, client=None, config=None, fallback_client=None, fallback_model=None):
         ChromaDB_VectorStore.__init__(self, config=config)
         OpenAI_Chat.__init__(self, client=client, config=config)
+        self._fallback_client = fallback_client  # DeepSeek, used if primary (Gemini) fails
+        self._fallback_model = fallback_model
         self._conn = None
         self._conn_kwargs = {}
 
@@ -37,6 +39,25 @@ class VannaAI(ChromaDB_VectorStore, OpenAI_Chat):
             question=question,
             **kwargs,
         )
+
+    def submit_prompt(self, prompt, **kwargs):
+        """Try primary client (Gemini); fall back to DeepSeek on any API error."""
+        try:
+            return super().submit_prompt(prompt, **kwargs)
+        except Exception:
+            if self._fallback_client is None:
+                raise
+            # swap client + model name, then retry
+            primary_client = self.client
+            primary_model = self.config.get('model')
+            self.client = self._fallback_client
+            if self._fallback_model:
+                self.config['model'] = self._fallback_model
+            try:
+                return super().submit_prompt(prompt, **kwargs)
+            finally:
+                self.client = primary_client
+                self.config['model'] = primary_model
 
     def connect_to_postgres(self, host, port, user, password, dbname, **kwargs):
         self._conn_kwargs = dict(host=host, port=int(port), user=user, password=password, dbname=dbname)
@@ -63,14 +84,29 @@ class VannaAI(ChromaDB_VectorStore, OpenAI_Chat):
 
 
 def get_vanna() -> VannaAI:
-    client = OpenAIClient(
+    deepseek = OpenAIClient(
         api_key=os.environ['DEEPSEEK_API_KEY'],
         base_url='https://api.deepseek.com',
     )
+    gemini_key = os.environ.get('GEMINI_API_KEY', '')
+    if gemini_key:
+        primary = OpenAIClient(
+            api_key=gemini_key,
+            base_url='https://generativelanguage.googleapis.com/v1beta/openai/',
+        )
+        fallback = deepseek
+        model = 'gemini-2.0-flash'  # VANNA_MODEL is for DeepSeek path only
+    else:
+        primary = deepseek
+        fallback = None
+        model = os.environ.get('VANNA_MODEL', 'deepseek-chat')
+
     vn = VannaAI(
-        client=client,
+        client=primary,
+        fallback_client=fallback,
+        fallback_model='deepseek-chat' if fallback else None,
         config={
-            'model': os.environ.get('VANNA_MODEL', 'deepseek-chat'),
+            'model': model,
             'path': os.path.expanduser(os.environ.get('CHROMA_PATH', '~/data/vanna-chroma')),
         },
     )
