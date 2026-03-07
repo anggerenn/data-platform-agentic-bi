@@ -133,25 +133,47 @@ def _has_prd(dbt_path: str, name: str) -> bool:
 
 
 def _build_fingerprints(dbt_path: str) -> list:
-    """Merge API fingerprints (all dashboards) with YAML fingerprints (undeployed).
+    """Build fingerprints from PRD JSON files (authoritative metric vocabulary).
 
-    Governance rules (applied to API dashboards):
-      - [WIP]-prefixed dashboards are always excluded (exploratory, no governance)
-      - Dashboards without a PRD file are treated as implicitly WIP and excluded
+    PRD files use the same human-readable metric text as new PRDs, giving
+    meaningful Jaccard similarity. API is only used to look up dashboard URLs.
 
-    API is the authoritative source. YAML-only dashboards (written but not yet
-    deployed) are added as a fallback so the housekeeper catches them pre-deploy.
+    Governance rules:
+      - [WIP]-prefixed dashboard titles are excluded
+      - Only dashboards with a PRD file are included
     """
-    # Primary: pull everything from Lightdash API, apply governance filter
-    api_fps = [
-        fp for fp in _fetch_api_fingerprints()
-        if not fp['name'].startswith('[WIP]') and _has_prd(dbt_path, fp['name'])
-    ]
-    api_names = {fp['name'] for fp in api_fps}
+    import json as _json
 
-    # Fallback: read YAML files for anything not yet in Lightdash
-    charts_dir     = os.path.join(dbt_path, 'lightdash', 'charts')
+    # Fetch URLs from API for matching by dashboard name
+    api_fps = _fetch_api_fingerprints()
+    url_by_name = {fp['name']: fp['url'] for fp in api_fps}
+
+    # Primary: read PRD JSON files — same vocabulary as new PRD metrics
+    prd_dir = os.path.join(dbt_path, 'lightdash', 'prd')
+    fingerprints = []
+    if os.path.exists(prd_dir):
+        for fn in os.listdir(prd_dir):
+            if not fn.endswith('.json'):
+                continue
+            with open(os.path.join(prd_dir, fn)) as f:
+                prd_data = _json.load(f)
+            name = prd_data.get('title', fn[:-5])
+            if name.startswith('[WIP]'):
+                continue
+            metrics = prd_data.get('metrics', [])
+            objective = prd_data.get('objective', '')
+            kws = _keywords(' '.join(metrics) + ' ' + objective)
+            fingerprints.append({
+                'name': name,
+                'url': url_by_name.get(name, ''),
+                'keywords': kws,
+            })
+
+    prd_names = {fp['name'] for fp in fingerprints}
+
+    # Fallback: YAML-only dashboards not yet in any PRD file (pre-deploy)
     dashboards_dir = os.path.join(dbt_path, 'lightdash', 'dashboards')
+    charts_dir     = os.path.join(dbt_path, 'lightdash', 'charts')
 
     chart_kws: dict = {}
     if os.path.exists(charts_dir):
@@ -176,7 +198,7 @@ def _build_fingerprints(dbt_path: str) -> list:
             with open(os.path.join(dashboards_dir, fn)) as f:
                 doc = yaml.safe_load(f) or {}
             name = doc.get('name', fn[:-4])
-            if name in api_names:
+            if name in prd_names:
                 continue  # already covered by API
             if name.startswith('[WIP]') or not _has_prd(dbt_path, name):
                 continue  # no PRD → implicitly WIP
@@ -186,7 +208,7 @@ def _build_fingerprints(dbt_path: str) -> list:
                 all_kws |= chart_kws.get(slug, set())
             yaml_fps.append({'name': name, 'url': '', 'keywords': all_kws})
 
-    return api_fps + yaml_fps
+    return fingerprints + yaml_fps
 
 
 def _jaccard(a: set, b: set) -> float:
