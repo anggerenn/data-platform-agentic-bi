@@ -13,7 +13,7 @@ except ImportError:
 
 def make_model():
     gemini = OpenAIModel(
-        'gemini-2.0-flash',
+        'gemini-2.0-flash-lite',
         provider=OpenAIProvider(
             base_url='https://generativelanguage.googleapis.com/v1beta/openai/',
             api_key=os.environ.get('GEMINI_API_KEY', ''),
