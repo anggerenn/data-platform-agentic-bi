@@ -78,20 +78,17 @@ After exploring with Vanna, user clicks "Save Dashboard". Three agents collabora
 
 ---
 
-## Up Next — Replace ChromaDB with zvec + BM25
+## Up Next — Replace ChromaDB with BM25
 
 ### Overview
 Vanna container uses ~335MB RAM, almost entirely the ChromaDB ONNX embedding model.
-Replace with zvec (sparse/BM25 vector store) — no embedding model needed, ~60MB target.
+Replace with BM25 (rank-bm25) — no embedding model needed, ~60MB target.
 
-- [ ] Implement `vanna/vec.py` — custom `VannaLite` class (same interface: generate_sql, run_sql, train, get_related_documentation)
-  - BM25 sparse vectors via zvec (no neural embeddings, no API calls)
-  - Persistent storage at `/data/vanna-zvec/`
-  - State-aware: load existing index on startup
-- [ ] Update `vanna/vn.py` to use `VannaLite` instead of `MyVanna(ChromaDB_VectorStore, OpenAI_Chat)`
-- [ ] Remove `vanna` package from `docker/Dockerfile.vanna`, add `zvec` + `rank-bm25`
-- [ ] Migrate existing ChromaDB training data to zvec index
-- [ ] Rebuild + smoke test: `docker-compose up -d --build vanna`
+- [x] Implement `vanna/vec.py` — `BM25Store` class (persistent JSON + BM25Okapi retrieval)
+- [x] Rewrite `vanna/vn.py` — `VannaLite` (BM25Store + direct OpenAI client + clickhouse_connect)
+- [x] Remove `vanna` package from `docker/Dockerfile.vanna`, add `rank-bm25` + `pandas`
+- [x] Rebuild + smoke test: `docker-compose up -d --build vanna`
+- [x] Re-seed BM25 store: run `train.py` then `POST /retrain/schema` inside container
 
 ## Completed — Semantic Layer
 
@@ -165,6 +162,10 @@ Replace with zvec (sparse/BM25 vector store) — no embedding model needed, ~60M
 - [ ] Periodically review `/data/vanna-feedback.jsonl`
 - [ ] Promote good question/SQL pairs into `train.py`
 - [ ] Wipe ChromaDB and retrain: `docker-compose run vanna python train.py`
+
+### Chat widget modularisation
+- [ ] Split `vanna/static/app.js` into modules: `sse.js`, `chart.js`, `dashboard.js`, `chat.js`
+- Same behaviour, no framework change — improves maintainability
 
 ### Chart improvements (resolved by Data Visualizer Agent)
 - Replaced by Data Visualizer Agent — handles grouped bars, heatmap, pivot, opt-in logic

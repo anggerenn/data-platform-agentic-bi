@@ -3,9 +3,10 @@ FROM python:3.11-slim
 WORKDIR /app
 
 RUN pip install --no-cache-dir \
-    "vanna[chromadb,openai]==0.7.9" \
     "pydantic-ai[openai]" \
     clickhouse-connect \
+    rank-bm25 \
+    pandas \
     python-dotenv \
     flask \
     docker \
