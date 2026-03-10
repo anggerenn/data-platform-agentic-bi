@@ -1,11 +1,11 @@
 # Agentic BI Stack — Task List
 
 ## Stack
-- **Ingestion:** dlt → Prefect → ClickHouse
+- **Ingestion:** dlt → Prefect → PostgreSQL
 - **Transformation:** dbt core
-- **OLAP:** ClickHouse
+- **OLAP:** PostgreSQL (ParadeDB drop-in upgrade path if needed)
 - **BI:** Lightdash
-- **AI Service & Widget:** Vanna + pydantic.ai
+- **AI Service & Widget:** Vanna (ChromaDB + DeepSeek) + pydantic-ai agents (Gemini Flash Lite / DeepSeek fallback)
 - **Deployment:** Coolify on Contabo VPS (7.8GB RAM, ~5GB available)
 
 ---
@@ -146,9 +146,12 @@ Replace with BM25 (rank-bm25) — no embedding model needed, ~60MB target.
 
 ## Backlog
 
-### Latency — agent model
-- [x] Routing + DPM agents switched to Gemini 2.0 Flash with DeepSeek fallback
-- DeepSeek retained for Vanna SQL generation (accuracy matters most there)
+### Latency — reduce LLM round-trips
+- Each explore query makes 3 sequential LLM calls: router intent (~400ms) + vanna generate_sql (~2700ms) + router summary (~400ms)
+- ChromaDB ONNX retrieval adds ~967ms on top
+- Options: merge routing + SQL into one call; replace ONNX with pgvector + DeepSeek embeddings
+- [x] Routing + DPM agents switched to Gemini 2.0 Flash Lite with DeepSeek fallback
+- DeepSeek retained for Vanna SQL generation (accuracy > speed for this step)
 
 ### Dashboard chart positioning
 - [x] Storyteller agent: Minto Pyramid layout — KPI top, breakdowns side-by-side, trend full-width
@@ -171,6 +174,50 @@ Replace with BM25 (rank-bm25) — no embedding model needed, ~60MB target.
 - Replaced by Data Visualizer Agent — handles grouped bars, heatmap, pivot, opt-in logic
 - Rule-based `detectChart` in index.html to be removed once agent is live
 - [ ] Pivot table support in chat widget: for multi-dim breakdowns (e.g. category × city × revenue), render as pivot table instead of flat table
+
+### Vanna widget auth
+- [ ] No authentication on port 8084 — anyone who can reach vanna can query the DB
+- [ ] Options: nginx basic auth in front of /vanna/, or token header check in Flask
+
+### In-memory state (lost on container restart)
+- [ ] `sessions` dict (conversation history) resets on restart — acceptable for now, use Redis or SQLite for persistence
+- [ ] `_sql_cache` dict resets on restart — persist to disk (e.g. shelve or JSON) to survive deploys
+
+### Background git commit after dashboard deploy
+- [ ] After `lightdash-deploy` succeeds, commit new `.yml` files to git for version history
+- [ ] Currently: `.yml` files written to disk but not committed automatically
+
+### BM25 section (stale — reverted to ChromaDB)
+- [x] ~~Replace ChromaDB with BM25~~ — reverted; BM25 lacks generalization, ChromaDB/ONNX retained
+
+### Chat UX — date context awareness
+- [ ] Agent doesn't understand follow-up questions about data period (e.g. "is it overall period?", "filter only march") — lacks awareness of what date range the previous query covered
+- [ ] Every explore result should surface the date range it covers (e.g. "Data from 2026-01-01 to 2026-03-08") so users know what they're looking at without asking
+
+### Chat UX — key takeaways quality
+- [ ] `answer_semantic` LLM doesn't reason about data constraints (e.g. 100% multi-city customers → no comparison is possible)
+- [ ] Options: pass summary statistics (counts, min/max of key columns) as context when routing to `answer_semantic`; or upgrade to a stronger model for semantic answers
+
+### Housekeeper — add structural comparison layer
+- [x] Field-level: chart YAML field IDs merged into Jaccard fingerprint per dashboard
+- [x] Model-level: check() accepts model_name; same dbt model → score floored at partial threshold
+- [x] app.py reordered: data modeler runs before housekeeper so model_name is available
+
+### CSV export only downloads 20 rows
+- [x] Fixed: switched export from form POST to fetch+blob (encoding corruption); strip trailing LIMIT in /export backend
+
+### Data Modeler — model selection misses staging table
+- [x] Fixed: _needs_customer_grain() restricts candidates to models with customer_id when PRD mentions customer-level grain
+
+### Instructor — update README when dashboard is enriched with new narrative
+- [x] merge_guides() merges existing + new PRD; update_readme_tile() updates YAML + redeploys; wired in app.py on partial_uncovered
+
+### DPM agent — metrics vs dimensions distinction
+- [x] PRD.dimensions added; DPM instructions updated; builder/lightdash/instructor all use dimensions field
+
+### Dashboard — customer detail table
+- [ ] Dashboard builder should include a ranked table tile (customer_id, total_revenue, city, pct_of_city, rank) so sales teams can see who to reach out to
+- [ ] The Data Visualizer agent currently favours chart tiles; needs to support table tiles for leaderboard use cases
 
 ### Polish for pitch/demo
 - [ ] Prepare realistic sample business dataset
