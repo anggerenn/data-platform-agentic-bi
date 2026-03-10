@@ -376,6 +376,56 @@ def _find_dashboard_url(title: str) -> Optional[str]:
     return f"{public}/projects"
 
 
+# ── README tile update ─────────────────────────────────────────────────────────
+
+def update_readme_tile(dashboard_slug: str, guide, dbt_path: str = '/dbt') -> bool:
+    """Update the README.md tab markdown tile in an existing dashboard YAML and redeploy.
+
+    Returns True if the file was found, updated, and redeploy triggered.
+    """
+    dashboard_path = os.path.join(dbt_path, 'lightdash', 'dashboards', f'{dashboard_slug}.yml')
+    if not os.path.exists(dashboard_path):
+        return False
+
+    try:
+        with open(dashboard_path) as f:
+            doc = yaml.safe_load(f) or {}
+
+        use_cases_md = '\n'.join(f'- {u}' for u in (guide.use_cases or []))
+        tips_md = '\n'.join(f'- {t}' for t in (guide.tips or []))
+        content = f"## Overview\n{guide.overview}"
+        if use_cases_md:
+            content += f"\n\n## Questions this answers\n{use_cases_md}"
+        if tips_md:
+            content += f"\n\n## Tips\n{tips_md}"
+
+        updated = False
+        for tile in doc.get('tiles', []):
+            if tile.get('type') == 'markdown':
+                tile['properties']['content'] = content
+                updated = True
+                break
+
+        if not updated:
+            return False
+
+        _dump = lambda d: yaml.dump(d, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        with open(dashboard_path, 'w') as f:
+            f.write(_dump(doc))
+
+        try:
+            client = docker.from_env()
+            network, host_dbt_path = _get_container_context(client)
+            if host_dbt_path:
+                _trigger_deploy(host_dbt_path, network or 'data-platform_data-network')
+        except Exception:
+            pass
+
+        return True
+    except Exception:
+        return False
+
+
 # ── Public entry point ─────────────────────────────────────────────────────────
 
 def create_dashboard(prd, model_result, guide=None) -> dict:

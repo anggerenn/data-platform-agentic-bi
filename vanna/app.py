@@ -22,9 +22,9 @@ from pydantic_ai.messages import (
 )
 from agents.planner import run_dpm, PRD
 from agents.builder import run_data_modeler
-from agents.lightdash import create_dashboard
+from agents.lightdash import create_dashboard, update_readme_tile
 from agents.housekeeper import check as housekeeper_check
-from agents.instructor import generate_guide
+from agents.instructor import generate_guide, merge_guides
 
 from agents.router import AgentDeps, agent
 from agents.designer import get_chart_spec
@@ -343,6 +343,22 @@ def dashboard_build():
             }
         else:
             housekeeper_info = {}
+
+        # On partial_uncovered: regenerate the existing dashboard's README
+        # to incorporate the new PRD narrative alongside the original one
+        if verdict.verdict == 'partial_uncovered' and verdict.matched_dashboard_name:
+            try:
+                import re as _re
+                existing_slug = _re.sub(r'[^a-z0-9]+', '_', verdict.matched_dashboard_name.lower()).strip('_')
+                existing_prd_path = os.path.join(_DBT_PATH, 'lightdash', 'prd', f'{existing_slug}.json')
+                if os.path.exists(existing_prd_path):
+                    with open(existing_prd_path) as f:
+                        existing_prd_data = json.load(f)
+                    merged = merge_guides(existing_prd_data, prd)
+                    updated = update_readme_tile(existing_slug, merged, _DBT_PATH)
+                    housekeeper_info['readme_updated'] = updated
+            except Exception:
+                pass
 
         model_result = asyncio.run(run_data_modeler(prd, _DBT_PATH))
 

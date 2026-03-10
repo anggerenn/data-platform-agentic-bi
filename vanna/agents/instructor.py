@@ -47,3 +47,26 @@ async def _run(prd) -> DashboardGuide:
 
 def generate_guide(prd) -> DashboardGuide:
     return asyncio.run(_run(prd))
+
+
+async def _merge(existing_prd_data: dict, new_prd) -> DashboardGuide:
+    prompt = (
+        f"EXISTING dashboard:\n"
+        f"  Title: {existing_prd_data.get('title', '')}\n"
+        f"  Objective: {existing_prd_data.get('objective', '')}\n"
+        f"  Audience: {existing_prd_data.get('audience', '')}\n"
+        f"  Metrics: {', '.join(existing_prd_data.get('metrics', []))}\n\n"
+        f"NEW content being added to this dashboard:\n"
+        f"  Objective: {new_prd.objective}\n"
+        f"  Audience: {new_prd.audience}\n"
+        f"  Metrics: {', '.join(new_prd.metrics)}\n\n"
+        f"Write a combined guide that covers both use cases. The overview should explain "
+        f"that this dashboard serves multiple audiences or objectives."
+    )
+    result = await _agent.run(prompt)
+    return result.output
+
+
+def merge_guides(existing_prd_data: dict, new_prd) -> DashboardGuide:
+    """Generate a merged README guide from an existing PRD dict and a new PRD."""
+    return asyncio.run(_merge(existing_prd_data, new_prd))
