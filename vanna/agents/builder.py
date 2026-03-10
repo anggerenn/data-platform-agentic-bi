@@ -21,6 +21,19 @@ _FILLER = {
     'over', 'time', 'last', 'current', 'previous', 'vs', 'each', 'all',
 }
 
+# Phrases that signal the PRD requires individual customer-level grain
+_CUSTOMER_GRAIN = {
+    'customer_id', 'customer id', 'per customer', 'by customer',
+    'individual customer', 'leaderboard', 'customer rank', 'customer level',
+    'top customer', 'each customer',
+}
+
+
+def _needs_customer_grain(metrics: list[str]) -> bool:
+    """Return True if any metric text implies individual customer-level grain."""
+    combined = ' '.join(metrics).lower()
+    return any(kw in combined for kw in _CUSTOMER_GRAIN)
+
 
 def _scan_models(dbt_path: str) -> list[dict]:
     results = []
@@ -64,8 +77,16 @@ def _coverage_score(model: dict, metrics: list[str]) -> float:
 
 def find_best_model(dbt_path: str, metrics: list[str]) -> Optional[dict]:
     models = _scan_models(dbt_path)
+
+    # Customer-grain override: if PRD needs customer_id, restrict to models that have it.
+    # This prevents the canonical daily_sales (no customer_id) from being selected when
+    # the PRD asks for individual customer breakdowns or leaderboards.
+    if _needs_customer_grain(metrics):
+        customer_models = [m for m in models if 'customer_id' in m['columns']]
+        if customer_models:
+            models = customer_models
+
     canonical = [m for m in models if m['canonical']]
-    non_canonical = [m for m in models if not m['canonical']]
 
     # Score all models; canonical ones get a tie-breaking boost
     scored = sorted(
