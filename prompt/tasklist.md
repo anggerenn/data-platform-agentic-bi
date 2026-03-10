@@ -206,9 +206,15 @@ Replace with BM25 (rank-bm25) — no embedding model needed, ~60MB target.
 ### CSV export only downloads 20 rows
 - [x] Fixed: switched export from form POST to fetch+blob (encoding corruption); strip trailing LIMIT in /export backend
 
-### Data Modeler — model selection misses staging table
+### Data Modeler — grain-aware model selection
 - [x] Partial fix: _needs_customer_grain() restricts candidates to models with customer_id when PRD mentions customer-level grain
-- [ ] **Backlog — proper fix:** current approach is hardcoded to customer_id keywords and won't scale to 3+ tables or new grain levels. Proper approach: generate SQL via Vanna for each PRD metric, inspect which columns/tables the SQL references, then map back to the dbt model that covers that grain. Alternatively, use surrogate/primary key inference — identify the lowest-granularity key required by the PRD and find the model whose PK matches. Data Modeler should reason about required joins, not match keywords.
+- [ ] **Backlog — proper fix:** surrogate-key grain matching
+  - Each dbt model declares its grain in `schema.yml` under `meta.grain: [dim1, dim2, ...]` — the same columns used in the surrogate key (verified by `count(1) == count(distinct concat(dim1,'/',dim2,...))`)
+  - Data Modeler reads `meta.grain` per model and extracts required dimensions from the PRD
+  - Selection rule: pick the **coarsest model whose grain is a superset of the required PRD dimensions** — coarser = smaller table = more efficient
+  - Falls back to lowest-grain model (staging, grain = order_id) only when no summary table covers the required dimensions
+  - Example: `daily_sales` grain = `[order_date, category, city]` → can serve "revenue by city" ✓, cannot serve "revenue by customer_id" ✗ (customer_id is aggregated away); `stg_orders` grain = `[order_id]` → can serve anything ✓
+  - Remove `_needs_customer_grain()` hardcoded approach once this is implemented
 
 ### Instructor — update README when dashboard is enriched with new narrative
 - [x] merge_guides() merges existing + new PRD; update_readme_tile() updates YAML + redeploys; wired in app.py on partial_uncovered
