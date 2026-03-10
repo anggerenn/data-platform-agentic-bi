@@ -54,9 +54,12 @@ def _metric_keywords(metrics: list[str]) -> set:
 
 # ── Chart planning ─────────────────────────────────────────────────────────────
 
-def _plan_charts(model_name: str, columns: list[str], metrics: list[str]) -> list[dict]:
+def _plan_charts(model_name: str, columns: list[str], metrics: list[str], dimensions: list[str] | None = None) -> list[dict]:
     classified = _classify_columns(columns)
+    # Merge metric keywords with explicit dimension names for chart filtering
     kw = _metric_keywords(metrics)
+    if dimensions:
+        kw |= _metric_keywords(dimensions)
     dim = lambda col: f"{model_name}_{col}"      # dimension field ID
     met = lambda col: f"{model_name}_{col}_sum"  # metric field ID (matches schema meta.metrics)
 
@@ -433,7 +436,7 @@ def create_dashboard(prd, model_result, guide=None) -> dict:
     Generate Lightdash dashboard YAML, write it to dbt/lightdash/,
     trigger lightdash-deploy via Docker SDK, return dashboard URL.
     """
-    chart_specs = _plan_charts(model_result.model_name, model_result.columns, prd.metrics)
+    chart_specs = _plan_charts(model_result.model_name, model_result.columns, prd.metrics, getattr(prd, 'dimensions', None))
     if not chart_specs:
         return {"error": "Could not plan any charts from PRD metrics and model columns"}
 

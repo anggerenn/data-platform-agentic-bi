@@ -111,7 +111,10 @@ async def run_data_modeler(prd, dbt_path: str) -> DataModelResult:
     If yes, return it directly — no LLM, no SQL generation.
     If no, flag needs_new_model=True (dbt model creation is a future step).
     """
-    best = find_best_model(dbt_path, prd.metrics)
+    # Use both metrics and dimensions for coverage scoring — dimensions are
+    # equally important for model selection (e.g. customer_id is a dimension)
+    search_terms = prd.metrics + getattr(prd, 'dimensions', [])
+    best = find_best_model(dbt_path, search_terms)
     if best:
         return DataModelResult(
             model_name=best['name'],

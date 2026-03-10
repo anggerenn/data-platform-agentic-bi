@@ -12,7 +12,8 @@ class PRD(BaseModel):
     problem_statement: str
     objective: str
     audience: str
-    metrics: list[str]
+    metrics: list[str]      # what you measure: aggregations (revenue, count, %)
+    dimensions: list[str] = []  # how you slice: grouping fields (city, category, date)
     action_items: list[str]
 
 
@@ -36,8 +37,13 @@ Ask ONE short question at a time, in this exact order. Do NOT skip any:
 1. Problem statement — what pain point does this solve?
 2. Business objective — what decision/outcome does it enable? (sanity-check vs problem statement)
 3. Target audience — who will use it?
-4. Key metrics — what numbers matter most?
+4. Key metrics AND dimensions — what numbers matter most (metrics = aggregations: revenue, count, %)
+   AND how should they be sliced (dimensions = grouping fields: by city, by category, by date)?
 5. Desired actions — what should viewers DO after seeing the dashboard?
+
+When generating the PRD: put aggregations in metrics (e.g. "Total Revenue", "Order Count"),
+put grouping fields in dimensions (e.g. "City", "Category", "Order Date").
+Do NOT mix them — customer_id is a dimension, not a metric.
 
 You MUST receive an answer to all 5 before generating the PRD.
 Only respond with status="complete" after question 5 is answered.

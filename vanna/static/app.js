@@ -499,6 +499,7 @@ function showPRD(prd) {
     `<div class="prd-section"><span class="prd-label">Objective</span><p>${prd.objective}</p></div>` +
     `<div class="prd-section"><span class="prd-label">Audience</span><p>${prd.audience}</p></div>` +
     `<div class="prd-section"><span class="prd-label">Key Metrics</span><ul>${prd.metrics.map(m => `<li>${m}</li>`).join('')}</ul></div>` +
+    (prd.dimensions && prd.dimensions.length ? `<div class="prd-section"><span class="prd-label">Dimensions</span><ul>${prd.dimensions.map(d => `<li>${d}</li>`).join('')}</ul></div>` : '') +
     `<div class="prd-section"><span class="prd-label">Actions</span><ul>${prd.action_items.map(a => `<li>${a}</li>`).join('')}</ul></div>` +
     `<button class="build-dashboard-btn">Build Dashboard</button>`;
   const buildBtn = card.querySelector('.build-dashboard-btn');

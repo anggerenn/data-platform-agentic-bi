@@ -34,11 +34,13 @@ Be specific and grounded in the actual metrics and audience. No fluff.""",
 
 
 async def _run(prd) -> DashboardGuide:
+    dimensions = getattr(prd, 'dimensions', [])
     prompt = (
         f"Dashboard title: {prd.title}\n"
         f"Objective: {prd.objective}\n"
         f"Audience: {prd.audience}\n"
         f"Metrics: {', '.join(prd.metrics)}\n"
+        f"Dimensions: {', '.join(dimensions) if dimensions else 'none'}\n"
         f"Action items: {', '.join(prd.action_items) if prd.action_items else 'none'}"
     )
     result = await _agent.run(prompt)
