@@ -208,13 +208,26 @@ Replace with BM25 (rank-bm25) — no embedding model needed, ~60MB target.
 
 ### Data Modeler — grain-aware model selection
 - [x] Partial fix: _needs_customer_grain() restricts candidates to models with customer_id when PRD mentions customer-level grain
-- [ ] **Backlog — proper fix:** surrogate-key grain matching
-  - Each dbt model declares its grain in `schema.yml` under `meta.grain: [dim1, dim2, ...]` — the same columns used in the surrogate key (verified by `count(1) == count(distinct concat(dim1,'/',dim2,...))`)
-  - Data Modeler reads `meta.grain` per model and extracts required dimensions from the PRD
-  - Selection rule: pick the **coarsest model whose grain is a superset of the required PRD dimensions** — coarser = smaller table = more efficient
-  - Falls back to lowest-grain model (staging, grain = order_id) only when no summary table covers the required dimensions
-  - Example: `daily_sales` grain = `[order_date, category, city]` → can serve "revenue by city" ✓, cannot serve "revenue by customer_id" ✗ (customer_id is aggregated away); `stg_orders` grain = `[order_id]` → can serve anything ✓
-  - Remove `_needs_customer_grain()` hardcoded approach once this is implemented
+- [ ] **Backlog — proper fix:** declare grain + relationships in `meta` block, use them for model selection
+  - **Step 1:** add `meta.grain` and `meta.relationships` to all models in `schema.yml`:
+    ```yaml
+    - name: daily_sales
+      meta:
+        canonical: true
+        grain: [order_date, category, city]
+        relationships:
+          - to: stg_orders
+            type: many_to_one
+            join_on: [order_date, category, city]
+    - name: stg_orders
+      meta:
+        canonical: false
+        grain: [order_id]
+    ```
+  - **Step 2:** update `validate_schema.py` to enforce `meta.grain` is declared on all models
+  - **Step 3:** update `find_best_model()` in `builder.py` — pick coarsest model whose `meta.grain` ⊇ required PRD dimensions; fall back to lowest-grain (staging) only when no summary table covers it
+  - **Step 4:** remove `_needs_customer_grain()` hardcoded approach
+  - Why `meta` and not MetricFlow entities: avoids a second semantic layer alongside Lightdash `meta.metrics`; already the convention in this project; machine-readable by existing tooling (`builder.py`, `validate_schema.py`, `train_from_schema.py`)
 
 ### Instructor — update README when dashboard is enriched with new narrative
 - [x] merge_guides() merges existing + new PRD; update_readme_tile() updates YAML + redeploys; wired in app.py on partial_uncovered
