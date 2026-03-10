@@ -380,17 +380,31 @@ function renderResult(result) {
     const csvBtn = document.createElement('button');
     csvBtn.className = 'csv-btn';
     csvBtn.textContent = '⬇ Export CSV';
-    csvBtn.onclick = () => {
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = '/export';
-      form.style.display = 'none';
-      const inp = document.createElement('input');
-      inp.type = 'hidden'; inp.name = 'sql'; inp.value = result.sql;
-      form.appendChild(inp);
-      document.body.appendChild(form);
-      form.submit();
-      document.body.removeChild(form);
+    csvBtn.onclick = async () => {
+      csvBtn.disabled = true;
+      csvBtn.textContent = '⏳ Exporting…';
+      try {
+        const resp = await fetch('/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sql: result.sql }),
+        });
+        if (!resp.ok) throw new Error('Export failed');
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'export.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        alert('Export failed: ' + e.message);
+      } finally {
+        csvBtn.disabled = false;
+        csvBtn.textContent = '⬇ Export CSV';
+      }
     };
     wrap.appendChild(csvBtn);
   }

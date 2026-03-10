@@ -3,6 +3,7 @@ import dataclasses
 import json
 import os
 import queue
+import re
 import threading
 import uuid
 
@@ -425,6 +426,9 @@ def export_csv():
     sql = (body.get('sql') or request.form.get('sql') or '').strip()
     if not sql:
         return jsonify({"error": "sql required"}), 400
+
+    # Strip trailing LIMIT — DeepSeek may add one for display purposes
+    sql = re.sub(r'\s+LIMIT\s+\d+\s*;?\s*$', '', sql, flags=re.IGNORECASE).strip()
 
     try:
         df = vn.run_sql(sql)
