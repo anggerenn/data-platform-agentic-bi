@@ -12,7 +12,6 @@ Flow:
        none             (score  < 0.4) → no overlap, build freely
   6. LLM only called for the ambiguous zone (0.5–0.7) to check narrative context
 """
-import asyncio
 import os
 import re
 from typing import Literal, Optional
@@ -326,13 +325,13 @@ Be conservative with "full". Different audience or different dimensional cut
 )
 
 
-async def _llm_disambiguate(prd, existing: dict, score: float) -> _LLMVerdict:
+def _llm_disambiguate(prd, existing: dict, score: float) -> _LLMVerdict:
     prompt = (
         f"New PRD — objective: {prd.objective} | audience: {prd.audience} | metrics: {prd.metrics}\n"
         f"Existing dashboard — name: {existing['name']} | metric keywords: {sorted(existing['keywords'])}\n"
         f"Jaccard similarity: {score:.2f}"
     )
-    result = await _agent.run(prompt)
+    result = _agent.run_sync(prompt)
     return result.output
 
 
@@ -379,7 +378,7 @@ def check(prd, vn=None, model_name: Optional[str] = None) -> HousekeeperVerdict:
                 if verdict:
                     return verdict
             try:
-                llm = asyncio.run(_llm_disambiguate(prd, best, score))
+                llm = _llm_disambiguate(prd, best, score)
                 return HousekeeperVerdict(
                     verdict=llm.verdict,
                     matched_dashboard_name=best['name'] if llm.verdict != 'none' else None,

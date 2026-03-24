@@ -381,14 +381,15 @@ def _find_dashboard_url(title: str) -> Optional[str]:
 
 # ── README tile update ─────────────────────────────────────────────────────────
 
-def update_readme_tile(dashboard_slug: str, guide, dbt_path: str = '/dbt') -> bool:
+def update_readme_tile(dashboard_slug: str, guide, dbt_path: str = '/dbt') -> tuple[bool, Optional[str]]:
     """Update the README.md tab markdown tile in an existing dashboard YAML and redeploy.
 
-    Returns True if the file was found, updated, and redeploy triggered.
+    Returns (yaml_updated, deploy_error). yaml_updated is True when the file was
+    written successfully. deploy_error is set when the Docker deploy step failed.
     """
     dashboard_path = os.path.join(dbt_path, 'lightdash', 'dashboards', f'{dashboard_slug}.yml')
     if not os.path.exists(dashboard_path):
-        return False
+        return False, None
 
     try:
         with open(dashboard_path) as f:
@@ -410,7 +411,7 @@ def update_readme_tile(dashboard_slug: str, guide, dbt_path: str = '/dbt') -> bo
                 break
 
         if not updated:
-            return False
+            return False, None
 
         _dump = lambda d: yaml.dump(d, default_flow_style=False, allow_unicode=True, sort_keys=False)
         with open(dashboard_path, 'w') as f:
@@ -421,12 +422,12 @@ def update_readme_tile(dashboard_slug: str, guide, dbt_path: str = '/dbt') -> bo
             network, host_dbt_path = _get_container_context(client)
             if host_dbt_path:
                 _trigger_deploy(host_dbt_path, network or 'data-platform_data-network')
-        except Exception:
-            pass
+        except docker.errors.DockerException as e:
+            return True, f"YAML updated but deploy failed: {e}"
 
-        return True
+        return True, None
     except Exception:
-        return False
+        return False, None
 
 
 # ── Public entry point ─────────────────────────────────────────────────────────

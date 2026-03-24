@@ -375,8 +375,10 @@ def dashboard_build():
                     with open(existing_prd_path) as f:
                         existing_prd_data = json.load(f)
                     merged = merge_guides(existing_prd_data, prd)
-                    updated = update_readme_tile(existing_slug, merged, _DBT_PATH)
+                    updated, deploy_err = update_readme_tile(existing_slug, merged, _DBT_PATH)
                     housekeeper_info['readme_updated'] = updated
+                    if deploy_err:
+                        housekeeper_info['readme_deploy_error'] = deploy_err
             except Exception:
                 pass
 
