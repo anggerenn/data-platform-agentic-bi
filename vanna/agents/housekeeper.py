@@ -12,6 +12,7 @@ Flow:
        none             (score  < 0.4) → no overlap, build freely
   6. LLM only called for the ambiguous zone (0.5–0.7) to check narrative context
 """
+import concurrent.futures
 import os
 import re
 from typing import Literal, Optional
@@ -41,12 +42,41 @@ class HousekeeperVerdict(BaseModel):
 
 # ── Lightdash API: fetch all dashboard fingerprints ───────────────────────────
 
+# Module-level cache: chart UUID → keyword set.
+# Avoids re-fetching the same chart when it appears in multiple dashboards
+# or across successive check() calls in the same process lifetime.
+_chart_meta_cache: dict[str, set] = {}
+
+_MAX_CHART_WORKERS = 8  # concurrent chart-metadata requests
+
+
+def _fetch_chart_keywords(chart_uuid: str, internal: str, headers: dict) -> set:
+    """Return metric keyword set for one chart UUID, using module-level cache."""
+    if chart_uuid in _chart_meta_cache:
+        return _chart_meta_cache[chart_uuid]
+    try:
+        mq = requests.get(
+            f"{internal}/api/v1/saved/{chart_uuid}",
+            headers=headers, timeout=8,
+        ).json()['results']['metricQuery']
+        fields = mq.get('metrics', []) + mq.get('dimensions', [])
+        kws: set = set()
+        for fid in fields:
+            kws |= _keywords(_normalise_field(fid))
+        _chart_meta_cache[chart_uuid] = kws
+        return kws
+    except Exception:
+        return set()
+
+
 def _fetch_api_fingerprints() -> list:
     """Pull fingerprints for ALL dashboards (UI + YAML) from the Lightdash API.
 
-    For each dashboard → tiles → savedChartUuid → metricQuery fields.
-    This covers dashboards created directly in the Lightdash UI that never
-    touch the dbt YAML files.
+    Optimised to reduce sequential API calls:
+      1. Fetch all dashboard tile lists (1 call per dashboard).
+      2. Collect unique chart UUIDs across all dashboards.
+      3. Fetch uncached chart metadata in parallel (ThreadPoolExecutor).
+      4. Build fingerprints from the in-memory cache — no extra calls.
     """
     internal = os.environ.get('LIGHTDASH_INTERNAL_URL', 'http://lightdash:8080')
     public   = os.environ['LIGHTDASH_PUBLIC_URL']
@@ -67,34 +97,46 @@ def _fetch_api_fingerprints() -> list:
     except Exception:
         return []
 
-    fingerprints = []
+    # Phase 1: fetch tiles for every dashboard (sequential — typically <10 dashboards)
+    dashboard_tiles: dict[str, list] = {}
     for d in dashboards:
-        name = d['name']
-        url  = f"{public}/projects/{project_uuid}/dashboards/{d['uuid']}/view"
         try:
-            tiles = requests.get(
+            dashboard_tiles[d['uuid']] = requests.get(
                 f"{internal}/api/v1/dashboards/{d['uuid']}",
                 headers=headers, timeout=8,
             ).json()['results']['tiles']
         except Exception:
-            tiles = []
+            dashboard_tiles[d['uuid']] = []
 
+    # Phase 2: collect unique chart UUIDs not yet in cache
+    all_chart_uuids: set[str] = {
+        tile.get('properties', {}).get('savedChartUuid')
+        for tiles in dashboard_tiles.values()
+        for tile in tiles
+        if tile.get('properties', {}).get('savedChartUuid')
+    }
+    uncached = [u for u in all_chart_uuids if u not in _chart_meta_cache]
+
+    # Phase 3: fetch uncached charts in parallel
+    if uncached:
+        workers = min(len(uncached), _MAX_CHART_WORKERS)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            futs = [
+                pool.submit(_fetch_chart_keywords, u, internal, headers)
+                for u in uncached
+            ]
+            concurrent.futures.wait(futs)
+
+    # Phase 4: build fingerprints entirely from cache (no more HTTP calls)
+    fingerprints = []
+    for d in dashboards:
+        name = d['name']
+        url  = f"{public}/projects/{project_uuid}/dashboards/{d['uuid']}/view"
         all_kws: set = set()
-        for tile in tiles:
+        for tile in dashboard_tiles.get(d['uuid'], []):
             chart_uuid = tile.get('properties', {}).get('savedChartUuid')
-            if not chart_uuid:
-                continue
-            try:
-                mq = requests.get(
-                    f"{internal}/api/v1/saved/{chart_uuid}",
-                    headers=headers, timeout=8,
-                ).json()['results']['metricQuery']
-                fields = mq.get('metrics', []) + mq.get('dimensions', [])
-                for fid in fields:
-                    all_kws |= _keywords(_normalise_field(fid))
-            except Exception:
-                continue
-
+            if chart_uuid:
+                all_kws |= _fetch_chart_keywords(chart_uuid, internal, headers)
         fingerprints.append({'name': name, 'url': url, 'keywords': all_kws})
 
     return fingerprints

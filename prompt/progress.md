@@ -1,6 +1,55 @@
 # Project Progress
 
+## Session 9 — P2 Fixes (2026-03-24)
+
+### Fix: `meta.grain` declared on all dbt models
+- `dbt/models/marts/schema.yml`: added `grain: [order_date, category, city]` and `relationships` (→ stg_orders) to `daily_sales` meta
+- `dbt/models/staging/schema.yml`: added `grain: [order_id]` to `stg_orders` meta
+- `dbt/validate_schema.py`: canonical models now fail validation if `meta.grain` is missing, with a clear error message
+- `vanna/agents/builder.py`:
+  - `_scan_models` now extracts `grain` from each model's meta
+  - `_CUSTOMER_GRAIN` set and `_needs_customer_grain()` removed
+  - `find_best_model` rewritten: takes explicit `dimensions` + `metrics` params; checks grain-superset coverage before falling back to keyword scoring — a PRD with `dimensions: ['customer_id']` correctly routes to `stg_orders` because `daily_sales.grain` doesn't contain `customer_id`
+  - `run_data_modeler` passes `prd.dimensions` and `prd.metrics` separately
+
+### Fix: Flask route tests (`tests/test_routes.py`)
+- 17 tests covering `/chat/stream`, `/dashboard/build`, `/export`, `/feedback`
+- Test isolation: only stubs `dotenv` (not installed locally) and `agents.lightdash` (Python 3.10+ union syntax incompatible with local 3.9) — real agent modules load naturally so `test_housekeeper.py` is unaffected
+- 15 pass locally; 2 pandas CSV tests skip (will pass in Docker where pandas is installed)
+
+### Fix: Housekeeper API call batching (`vanna/agents/housekeeper.py`)
+- Added `_chart_meta_cache: dict[str, set]` — module-level cache, survives across `check()` calls in the same process; cache hits avoid repeat HTTP calls for charts appearing in multiple dashboards
+- Added `_fetch_chart_keywords(chart_uuid, internal, headers)` — cache-aware single-chart fetcher
+- Restructured `_fetch_api_fingerprints()` into 4 phases:
+  1. Fetch all dashboard tile lists sequentially (1 call per dashboard — unavoidable)
+  2. Collect unique chart UUIDs across all dashboards
+  3. Fetch all uncached chart UUIDs in parallel via `ThreadPoolExecutor(max_workers=8)`
+  4. Build fingerprints from cache — zero additional HTTP calls
+- Reduces worst-case calls from O(dashboards × charts) sequential to O(dashboards) + O(unique_charts) parallel
+
+---
+
 ## Session 8 — P0 Bug Fixes (2026-03-24)
+
+### Fix: `asyncio.run()` removed from housekeeper (`housekeeper.py`)
+- `_llm_disambiguate` changed from `async def` + `await _agent.run()` to plain `def` + `_agent.run_sync()`
+- `asyncio.run()` call in `check()` removed — no event loop created, no deadlock risk
+- Unused `import asyncio` removed
+
+### Fix: Docker socket failure surfaced (`lightdash.py`, `app.py`)
+- `update_readme_tile` return type changed from `bool` to `tuple[bool, Optional[str]]`
+- Inner `except Exception: pass` on Docker deploy → `except docker.errors.DockerException as e` — returns `(True, "YAML updated but deploy failed: ...")` so YAML write success is preserved but deploy failure is visible
+- `app.py` caller updated to unpack tuple and store `readme_deploy_error` in API response when set
+
+### Fix: hardcoded `localhost` defaults removed
+- `vn.py`: `ANALYTICS_DB_HOST` now requires explicit env var (no default) — VPS host is `analytics-db`, not `localhost`
+- `app.py`: `LIGHTDASH_PUBLIC_URL` now requires explicit env var
+- `housekeeper.py`: `LIGHTDASH_PUBLIC_URL` now requires explicit env var
+- `LIGHTDASH_INTERNAL_URL` default (`http://lightdash:8080`) left intact — correct for Docker network
+
+### Fix: missing env vars in `.env.example`
+- Added `GEMINI_API_KEY`, `LIGHTDASH_INTERNAL_URL`, `HOST_DBT_PATH`, `DOCKER_NETWORK_NAME` with comments explaining local vs VPS values
+- All four were referenced in code but absent from the example — a VPS deployer would have no hint to set them
 
 ### Fix: `needs_new_model` stub (`app.py`)
 - Was: `return jsonify({"needs_new_model": True, "error": "No existing model covers these metrics."})` — dead end for the user

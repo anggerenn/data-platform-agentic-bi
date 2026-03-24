@@ -1,0 +1,23 @@
+{
+  "title": "City Performance Monitor",
+  "problem_statement": "We don't know which city is underperforming until it's too late, leading to missed revenue opportunities and delayed corrective actions.",
+  "objective": "Monitor daily revenue by city to catch performance drops early, enabling proactive investigation and resource reallocation.",
+  "audience": "Sales managers responsible for regional performance and resource allocation.",
+  "metrics": [
+    "Daily revenue per city",
+    "Month-over-month growth by city",
+    "Category breakdown by city",
+    "Total unique customers per city",
+    "Units sold per city"
+  ],
+  "action_items": [
+    "Investigate cities showing revenue declines or underperformance",
+    "Reallocate marketing resources to underperforming areas",
+    "Adjust inventory distribution based on category performance",
+    "Escalate persistent issues to regional directors",
+    "Identify successful strategies from top-performing cities for replication"
+  ],
+  "built_at": "2026-03-07T18:27:37.336716Z",
+  "dashboard_url": "http://localhost:8080/projects/33252e0f-dd55-4789-a4fd-48a2060b5927/dashboards/1acc8b2b-4ace-4a03-adf9-ab273e28fbde/view",
+  "model": "daily_sales"
+}

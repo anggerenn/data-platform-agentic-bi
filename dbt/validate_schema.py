@@ -50,6 +50,14 @@ def validate_groups(groups, model, column):
 
 
 def validate_model(model_name, model_def):
+    grain = model_def.get('meta', {}).get('grain')
+    if not grain or not isinstance(grain, list):
+        errors.append(
+            f"  [{model_name}] missing meta.grain\n"
+            f"    Expected: meta.grain: [col1, col2] — columns that form the aggregation key\n"
+            f"    See: dbt/models/marts/schema.yml for reference"
+        )
+
     columns = model_def.get('columns', [])
 
     # Collect all metric keys for resolving derived refs

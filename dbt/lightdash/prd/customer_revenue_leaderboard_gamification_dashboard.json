@@ -1,0 +1,25 @@
+{
+  "title": "Customer Revenue Leaderboard & Gamification Dashboard",
+  "problem_statement": "It's hard to understand customer purchasing behavior and identify top performers across different cities, making it difficult to create effective incentive programs.",
+  "objective": "Enable sales teams to identify top customers for gamification and incentive programs to encourage continued purchasing and loyalty.",
+  "audience": "Sales teams and sales managers who need to track customer performance and implement incentive strategies.",
+  "metrics": [
+    "Customer ID",
+    "Total revenue per customer",
+    "City location(s)",
+    "Customer contribution percentage to their city's total revenue",
+    "Top 10 customer ranking by total revenue",
+    "Customer type (single city vs. multiple cities)",
+    "City count per customer"
+  ],
+  "action_items": [
+    "Identify top-performing customers for recognition and rewards",
+    "Create gamification programs to incentivize continued purchasing",
+    "Target specific customers with tailored incentive offers",
+    "Monitor customer performance trends over time",
+    "Focus sales efforts on high-potential customers in key cities"
+  ],
+  "built_at": "2026-03-07T22:36:20.825300Z",
+  "dashboard_url": "http://localhost:8080/projects/33252e0f-dd55-4789-a4fd-48a2060b5927/dashboards/fcd70902-ad3e-4ab4-a764-4f7311b56225/view",
+  "model": "daily_sales"
+}

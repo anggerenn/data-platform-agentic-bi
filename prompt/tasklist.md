@@ -142,17 +142,17 @@ Replace with BM25 (rank-bm25) — no embedding model needed, ~60MB target.
 - [x] **`needs_new_model` unimplemented** (`app.py`) — stub returns error; implement minimal dbt model scaffolding or at least a clear user-facing message with the required SQL
 
 ### P1 — Silent failures on VPS
-- [ ] **Hardcoded `localhost` defaults** — remove defaults from `vn.py`, `app.py`, `housekeeper.py`; require explicit env vars
-- [ ] **Docker socket failure is silent** (`lightdash.py`) — replace bare `except Exception` with specific exception + surfaced error in API response
-- [ ] **Missing env vars in `.env.example`** — add `GEMINI_API_KEY`, `HOST_DBT_PATH`, `DOCKER_NETWORK_NAME`
-- [ ] **`asyncio.run()` in housekeeper** (`housekeeper.py`) — replace with sync HTTP or restructure to avoid blocking async event loop
+- [x] **Hardcoded `localhost` defaults** — remove defaults from `vn.py`, `app.py`, `housekeeper.py`; require explicit env vars
+- [x] **Docker socket failure is silent** (`lightdash.py`) — replace bare `except Exception` with specific exception + surfaced error in API response
+- [x] **Missing env vars in `.env.example`** — add `GEMINI_API_KEY`, `HOST_DBT_PATH`, `DOCKER_NETWORK_NAME`
+- [x] **`asyncio.run()` in housekeeper** (`housekeeper.py`) — replace with sync HTTP or restructure to avoid blocking async event loop
 
 ### P2 — Fragile / incomplete
-- [ ] **`meta.grain` not declared** (`dbt/models/*/schema.yml`) — add `meta.grain` and `meta.relationships` to all models; update `builder.py` to use them instead of `_needs_customer_grain()` heuristic
-- [ ] **Designer hardcodes model name** (`designer.py`) — replace `'deepseek-chat'` with `os.environ.get('VANNA_MODEL', 'deepseek-chat')`
-- [ ] **Flask route tests missing** (`tests/`) — add pytest tests for `/chat/stream`, `/dashboard/build`, `/export`, `/feedback`
-- [ ] **`_scan_models()` re-parses on every call** (`builder.py`) — cache result at module level, invalidate on file change
-- [ ] **Housekeeper API calls not batched** (`housekeeper.py`) — reduce cascading per-chart calls; fetch dashboard tiles in bulk where Lightdash API allows
+- [x] **`meta.grain` not declared** (`dbt/models/*/schema.yml`) — add `meta.grain` and `meta.relationships` to all models; update `builder.py` to use them instead of `_needs_customer_grain()` heuristic
+- [x] **Designer hardcodes model name** (`designer.py`) — replace `'deepseek-chat'` with `os.environ.get('VANNA_MODEL', 'deepseek-chat')`
+- [x] **Flask route tests missing** (`tests/`) — add pytest tests for `/chat/stream`, `/dashboard/build`, `/export`, `/feedback`
+- [x] **`_scan_models()` re-parses on every call** (`builder.py`) — cache result at module level, invalidate on file change
+- [x] **Housekeeper API calls not batched** (`housekeeper.py`) — reduce cascading per-chart calls; fetch dashboard tiles in bulk where Lightdash API allows
 
 ---
 
@@ -249,7 +249,7 @@ Root cause of wrong queries: LLM picks between `revenue`, `amount`, `line_total`
 - Each explore query makes 3 sequential LLM calls: router intent (~400ms) + vanna generate_sql (~2700ms) + router summary (~400ms)
 - ChromaDB ONNX retrieval adds ~967ms on top
 - Options: merge routing + SQL into one call; replace ONNX with pgvector + DeepSeek embeddings
-- [x] Routing + DPM agents switched to Gemini 2.0 Flash Lite with DeepSeek fallback
+- [x] Routing + DPM agents use DeepSeek (Gemini removed — free tier too small)
 - DeepSeek retained for Vanna SQL generation (accuracy > speed for this step)
 
 ### Dashboard chart positioning

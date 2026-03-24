@@ -2,6 +2,7 @@ models:
   - name: stg_orders
     meta:
       canonical: false
+      grain: [order_id]
     description: "Staged orders from raw ingestion"
     columns:
       - name: order_id

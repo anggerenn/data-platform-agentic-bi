@@ -21,19 +21,6 @@ _FILLER = {
     'over', 'time', 'last', 'current', 'previous', 'vs', 'each', 'all',
 }
 
-# Phrases that signal the PRD requires individual customer-level grain
-_CUSTOMER_GRAIN = {
-    'customer_id', 'customer id', 'per customer', 'by customer',
-    'individual customer', 'leaderboard', 'customer rank', 'customer level',
-    'top customer', 'each customer',
-}
-
-
-def _needs_customer_grain(metrics: list[str]) -> bool:
-    """Return True if any metric text implies individual customer-level grain."""
-    combined = ' '.join(metrics).lower()
-    return any(kw in combined for kw in _CUSTOMER_GRAIN)
-
 
 _scan_cache: dict[str, list[dict]] = {}
 
@@ -62,6 +49,7 @@ def _scan_models(dbt_path: str) -> list[dict]:
                 'columns': [c['name'] for c in m.get('columns', [])],
                 'description': m.get('description', ''),
                 'canonical': bool(m.get('meta', {}).get('canonical')),
+                'grain': m.get('meta', {}).get('grain', []),
             })
     _scan_cache[dbt_path] = results
     return results
@@ -81,34 +69,50 @@ def _coverage_score(model: dict, metrics: list[str]) -> float:
     return matched / len(keywords)
 
 
-def find_best_model(dbt_path: str, metrics: list[str]) -> Optional[dict]:
+def find_best_model(
+    dbt_path: str,
+    dimensions: list[str],
+    metrics: list[str],
+) -> Optional[dict]:
     models = _scan_models(dbt_path)
 
-    # Customer-grain override: if PRD needs customer_id, restrict to models that have it.
-    # This prevents the canonical daily_sales (no customer_id) from being selected when
-    # the PRD asks for individual customer breakdowns or leaderboards.
-    if _needs_customer_grain(metrics):
-        customer_models = [m for m in models if 'customer_id' in m['columns']]
-        if customer_models:
-            models = customer_models
+    # Normalise required dimension names for grain comparison
+    required_dims = {d.lower().strip() for d in dimensions if d.strip()}
 
-    canonical = [m for m in models if m['canonical']]
+    def grain_covers(model: dict) -> bool:
+        """True if the model's declared grain is a superset of the required dimensions."""
+        if not required_dims:
+            return True
+        grain = {g.lower() for g in model.get('grain', [])}
+        return required_dims.issubset(grain)
 
-    # Score all models; canonical ones get a tie-breaking boost
+    covering = [m for m in models if grain_covers(m)]
+
+    if covering:
+        # Among models whose grain covers the required dims, prefer canonical;
+        # use coverage score as tiebreaker.
+        scored = sorted(
+            [(m, _coverage_score(m, metrics) + (0.1 if m['canonical'] else 0))
+             for m in covering],
+            key=lambda x: x[1],
+            reverse=True,
+        )
+        return scored[0][0]
+
+    # Fallback: no declared grain covers the required dims (e.g. staging models with
+    # row-level grain that have all raw columns).  Use coverage score across all models.
+    all_terms = dimensions + metrics
     scored = sorted(
-        [(m, _coverage_score(m, metrics) + (0.1 if m['canonical'] else 0)) for m in models],
+        [(m, _coverage_score(m, all_terms) + (0.1 if m['canonical'] else 0))
+         for m in models],
         key=lambda x: x[1],
         reverse=True,
     )
-
-    if scored and scored[0][1] >= 0.4:
+    if scored and scored[0][1] >= 0.3:
         return scored[0][0]
 
-    # Fallback: if there is exactly one canonical model it covers general analysis by definition
-    if len(canonical) == 1:
-        return canonical[0]
-
-    return None
+    canonical = [m for m in models if m['canonical']]
+    return canonical[0] if len(canonical) == 1 else None
 
 
 async def run_data_modeler(prd, dbt_path: str) -> DataModelResult:
@@ -117,10 +121,8 @@ async def run_data_modeler(prd, dbt_path: str) -> DataModelResult:
     If yes, return it directly — no LLM, no SQL generation.
     If no, flag needs_new_model=True (dbt model creation is a future step).
     """
-    # Use both metrics and dimensions for coverage scoring — dimensions are
-    # equally important for model selection (e.g. customer_id is a dimension)
-    search_terms = prd.metrics + getattr(prd, 'dimensions', [])
-    best = find_best_model(dbt_path, search_terms)
+    dimensions = getattr(prd, 'dimensions', [])
+    best = find_best_model(dbt_path, dimensions=dimensions, metrics=prd.metrics)
     if best:
         return DataModelResult(
             model_name=best['name'],

@@ -4,6 +4,11 @@ models:
   - name: daily_sales
     meta:
       canonical: true
+      grain: [order_date, category, city]
+      relationships:
+        - to: stg_orders
+          type: many_to_one
+          join_on: [order_date, category, city]
     description: "Aggregated daily sales by date, category and city"
     columns:
 
