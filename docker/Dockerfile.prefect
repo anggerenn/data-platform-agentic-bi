@@ -1,12 +1,9 @@
 FROM prefecthq/prefect:3.4.25-python3.12
 
-# Install Node.js 20 (Evidence) + git (lightdash sync)
-RUN apt-get update && apt-get install -y curl git && \
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y nodejs && \
-    apt-get clean
+# Install git (lightdash sync)
+RUN apt-get update && apt-get install -y git && apt-get clean
 
-COPY requirements.prefect.txt /tmp/requirements.txt
+COPY requirements.txt /tmp/requirements.txt
 RUN pip install -r /tmp/requirements.txt
 
 WORKDIR /opt/prefect
