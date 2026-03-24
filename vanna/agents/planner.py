@@ -1,6 +1,6 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage
 
@@ -20,6 +20,12 @@ class PRD(BaseModel):
 class DPMResponse(BaseModel):
     status: Literal["clarifying", "complete"]
     message: str
+
+    @model_validator(mode='after')
+    def prd_required_when_complete(self):
+        if self.status == 'complete' and self.prd is None:
+            raise ValueError("prd must be populated when status is 'complete'")
+        return self
     prd: Optional[PRD] = None
 
 
