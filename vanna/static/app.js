@@ -445,7 +445,8 @@ function renderResult(result) {
 
 // ── Dashboard builder ─────────────────────────────────
 
-async function startDashboard(btn) {
+async function startDashboard() {
+  const btn = document.getElementById('save-dashboard-btn');
   btn.disabled = true;
   btn.textContent = 'Starting…';
   try {
@@ -458,14 +459,40 @@ async function startDashboard(btn) {
     const data = await resp.json();
     dpmSessionId = data.dpm_session_id;
     isDashboardMode = true;
-    document.getElementById('user-input').placeholder = 'Answer to build your dashboard PRD…';
-    btn.style.display = 'none';
+    // Switch dashboard pane to DPM input
+    document.getElementById('dash-idle').style.display = 'none';
+    document.getElementById('dash-active').style.display = 'flex';
+    document.getElementById('dpm-input').focus();
+    // Dim explore pane
+    document.getElementById('user-input').disabled = true;
+    document.getElementById('send-btn').disabled = true;
     appendDPMMessage(data.message);
     if (data.status === 'complete' && data.prd) { showPRD(data.prd); exitDashboardMode(); }
   } catch (e) {
     btn.disabled = false;
     btn.textContent = 'Save as Dashboard';
     appendMessage('assistant', 'Could not start dashboard builder. Please try again.');
+  }
+}
+
+async function sendDPMInput() {
+  const input = document.getElementById('dpm-input');
+  const message = input.value.trim();
+  if (!message || !dpmSessionId) return;
+  input.value = '';
+  input.disabled = true;
+  document.getElementById('dpm-send-btn').disabled = true;
+  appendMessage('user', message);
+  try {
+    await sendDashboardMessage(message);
+  } catch (e) {
+    appendMessage('assistant', 'Dashboard builder error. Please try again.');
+  } finally {
+    if (isDashboardMode) {
+      input.disabled = false;
+      document.getElementById('dpm-send-btn').disabled = false;
+      input.focus();
+    }
   }
 }
 
@@ -574,7 +601,16 @@ async function buildDashboard(btn, sessionId) {
 function exitDashboardMode() {
   isDashboardMode = false;
   dpmSessionId = null;
-  document.getElementById('user-input').placeholder = 'Ask a question…';
+  // Restore dashboard pane to idle
+  document.getElementById('dash-active').style.display = 'none';
+  document.getElementById('dash-idle').style.display = 'flex';
+  const btn = document.getElementById('save-dashboard-btn');
+  btn.textContent = 'Save as Dashboard';
+  btn.disabled = false;
+  // Re-enable explore pane
+  document.getElementById('user-input').disabled = false;
+  document.getElementById('send-btn').disabled = false;
+  document.getElementById('user-input').focus();
 }
 
 // ── Feedback ──────────────────────────────────────────
@@ -614,27 +650,6 @@ async function sendMessage() {
   const sendBtn = document.getElementById('send-btn');
   const question = input.value.trim();
   if (!question || exchangeCount >= MAX_EXCHANGES) return;
-
-  if (isDashboardMode) {
-    input.value = '';
-    appendMessage('user', question);
-    input.disabled = true;
-    sendBtn.disabled = true;
-    document.getElementById('send-btn').style.display = 'none';
-    document.getElementById('stop-btn').style.display = 'block';
-    try {
-      await sendDashboardMessage(question);
-    } catch (e) {
-      appendMessage('assistant', 'Dashboard builder error. Please try again.');
-    } finally {
-      document.getElementById('stop-btn').style.display = 'none';
-      document.getElementById('send-btn').style.display = '';
-      input.disabled = false;
-      sendBtn.disabled = false;
-      input.focus();
-    }
-    return;
-  }
 
   input.value = '';
   input.disabled = true;
@@ -696,12 +711,8 @@ async function sendMessage() {
             bubble.querySelectorAll('.chart-wrap').forEach(el => Plotly.Plots.resize(el));
           });
 
-          const saveBar = document.getElementById('save-bar');
-          const saveDashBtn = document.getElementById('save-dashboard-btn');
           if (!isDashboardMode && event.intent === 'explore' && event.data && event.data.length > 0) {
-            saveBar.classList.add('visible');
-            saveDashBtn.disabled = false;
-            saveDashBtn.textContent = 'Save as Dashboard';
+            document.getElementById('save-dashboard-btn').disabled = false;
           }
 
           exchangeCount++;

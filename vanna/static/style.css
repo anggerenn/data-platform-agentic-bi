@@ -216,36 +216,61 @@ body {
   30%            { transform: translateY(-6px); }
 }
 
-/* ── Input area ───────────────────────────────────────── */
-.input-area {
+/* ── Split input area ─────────────────────────────────── */
+.split-input {
   display: flex;
-  gap: 8px;
-  padding: 10px 12px;
   border-top: 1px solid #ebebf0;
   flex-shrink: 0;
+  min-height: 64px;
 }
-#user-input {
+.split-pane {
   flex: 1;
-  padding: 8px 11px;
+  display: flex;
+  flex-direction: column;
+  padding: 7px 10px 8px;
+}
+.split-pane + .split-pane {
+  border-left: 1px solid #ebebf0;
+}
+.split-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #27ae60;
+  text-transform: lowercase;
+  margin-bottom: 5px;
+  letter-spacing: 0.02em;
+}
+.split-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex: 1;
+}
+
+#user-input, #dpm-input {
+  flex: 1;
+  padding: 7px 10px;
   border: 1px solid #ddd;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 12px;
   outline: none;
   transition: border-color 0.15s;
+  min-width: 0;
 }
-#user-input:focus { border-color: #7262ff; }
-#user-input:disabled { background: #f5f5f5; }
+#user-input:focus, #dpm-input:focus { border-color: #7262ff; }
+#user-input:disabled, #dpm-input:disabled { background: #f5f5f5; }
 
 #send-btn {
   background: #7262ff;
   color: #fff;
   border: none;
   border-radius: 8px;
-  padding: 8px 16px;
-  font-size: 13px;
+  padding: 7px 13px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: opacity 0.15s;
+  white-space: nowrap;
 }
 #send-btn:disabled { opacity: 0.45; cursor: default; }
 
@@ -255,12 +280,26 @@ body {
   color: #fff;
   border: none;
   border-radius: 8px;
-  padding: 8px 14px;
-  font-size: 13px;
+  padding: 7px 11px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
 }
 #stop-btn:hover { background: #e03e3e; }
+
+#dpm-send-btn {
+  background: #27ae60;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 11px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+#dpm-send-btn:disabled { opacity: 0.45; cursor: default; }
 
 /* ── Embedded mode (inside Lightdash widget panel) ────── */
 body.embedded {
@@ -319,30 +358,22 @@ body.side-panel #chat-btn { display: none; }
 }
 #chat-btn svg { pointer-events: none; }
 
-/* ── Save bar ────────────────────────────────────────── */
-#save-bar {
-  display: none;
-  padding: 6px 12px;
-  background: #f5f3ff;
-  border-bottom: 1px solid #e0d9ff;
-  flex-shrink: 0;
-}
-#save-bar.visible { display: flex; align-items: center; }
-
 /* ── Save Dashboard button ──────────────────────────── */
 #save-dashboard-btn {
   background: #7262ff;
   border: none;
   color: #fff;
-  border-radius: 5px;
+  border-radius: 6px;
   font-size: 11px;
-  padding: 4px 10px;
+  padding: 6px 10px;
   cursor: pointer;
   font-weight: 600;
   transition: opacity 0.12s;
+  width: 100%;
+  text-align: center;
 }
-#save-dashboard-btn:hover { opacity: 0.85; }
-#save-dashboard-btn:disabled { opacity: 0.55; cursor: default; }
+#save-dashboard-btn:hover:not(:disabled) { opacity: 0.85; }
+#save-dashboard-btn:disabled { opacity: 0.45; cursor: default; }
 
 /* ── PRD card ───────────────────────────────────────── */
 .prd-card {
