@@ -21,8 +21,6 @@ services:
       PREFECT_SERVER_API_HOST: 0.0.0.0
       PREFECT_API_URL: http://prefect-server:4200/api
       PREFECT_UI_API_URL: ${SERVICE_URL_PREFECT_SERVER}/api
-    ports:
-      - "4200:4200"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4200/api/health')"]
       interval: 10s
@@ -85,8 +83,6 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     volumes:
       - ~/data/minio:/data
-    ports:
-      - "9001:9001"   # console UI
     command: server /data --console-address ":9001"
     networks:
       - data-network
@@ -241,8 +237,6 @@ services:
       - ~/data/chroma-cache:/root/.cache/chroma
       - ./dbt:/dbt
       - /var/run/docker.sock:/var/run/docker.sock
-    ports:
-      - "8084:8084"
     networks:
       - data-network
     restart: unless-stopped
@@ -275,8 +269,6 @@ services:
         condition: service_healthy
       vanna:
         condition: service_started
-    ports:
-      - "8080:80"
     networks:
       - data-network
     restart: unless-stopped

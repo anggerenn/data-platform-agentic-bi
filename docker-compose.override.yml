@@ -1,0 +1,17 @@
+# Local development overrides — not used in production (Coolify ignores this file)
+services:
+  prefect-server:
+    ports:
+      - "4200:4200"
+
+  minio:
+    ports:
+      - "9001:9001"
+
+  vanna:
+    ports:
+      - "8084:8084"
+
+  nginx:
+    ports:
+      - "8080:80"

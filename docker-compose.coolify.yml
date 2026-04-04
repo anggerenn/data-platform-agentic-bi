@@ -27,6 +27,9 @@ services:
 
   pipeline-init:
     exclude_from_hc: true
+    volumes:
+      - /data/pipelines:/data
+      - ./dbt:/opt/prefect/dbt:ro
 
   prefect-worker:
     exclude_from_hc: true
