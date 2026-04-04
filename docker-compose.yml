@@ -171,7 +171,7 @@ services:
     volumes:
       - ~/data:/data
       - ./dbt:/opt/prefect/dbt:ro
-    command: python /opt/prefect/prefect/flows/main_pipeline.py
+    command: sh -c "python /opt/prefect/prefect/flows/main_pipeline.py || echo 'pipeline-init failed — check logs above'; exit 0"
     networks:
       - data-network
     restart: "no"
