@@ -1,6 +1,6 @@
-# Agentic BI Stack
+# data-platform-agentic-bi
 
-Self-hosted BI platform where stakeholders ask questions in plain English and the system generates persistent Lightdash dashboards automatically.
+Self-hosted data platform with an agentic BI layer — full pipeline from ingestion to transformation to BI, with AI agents that let stakeholders ask questions in plain English and automatically generate persistent dashboards.
 
 ## Stack
 
@@ -36,7 +36,7 @@ dlt (ingest) → PostgreSQL → dbt (transform) → Lightdash (visualize)
 ## Repo structure
 
 ```
-data-platform/
+data-platform-agentic-bi/
 ├── dbt/
 │   ├── models/           # staging + marts dbt models
 │   └── lightdash/        # charts, dashboards, PRDs (agent-generated)
