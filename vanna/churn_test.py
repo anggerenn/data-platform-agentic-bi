@@ -30,6 +30,7 @@ DPM_ANSWERS = [
     "Proactively identify high-value customers showing early signs of churn so sales can reach out before they're lost",
     "Sales managers and account managers",
     "Metrics: total revenue per customer, order count per customer, average order value, customer count by type (active vs inactive), customer leaderboard by revenue. Dimensions: by city, by category, by customer",
+    "Active means customer placed at least 1 order in the last 30 days. Inactive means no order in the last 30 days. Customer leaderboard means top customers ranked by total revenue descending.",
     "Reach out to top customers who haven't ordered recently, flag cities with declining customer counts, prioritise accounts with dropping order frequency",
 ]
 

@@ -1,16 +1,16 @@
 name: Total Revenue by City
 description: Total Revenue by City
-tableName: daily_sales
-updatedAt: '2026-03-24T10:38:41.000Z'
+tableName: high_value_customer_churn
+updatedAt: '2026-04-04T03:08:42.000Z'
 metricQuery:
-  exploreName: daily_sales
+  exploreName: high_value_customer_churn
   dimensions:
-  - daily_sales_city
+  - high_value_customer_churn_city
   metrics: &id001
-  - daily_sales_total_revenue_sum
+  - high_value_customer_churn_total_revenue_sum
   filters: {}
   sorts:
-  - fieldId: daily_sales_total_revenue_sum
+  - fieldId: high_value_customer_churn_total_revenue_sum
     descending: true
   limit: 500
   metricOverrides: {}
@@ -22,21 +22,25 @@ chartConfig:
   type: cartesian
   config:
     layout:
-      xField: daily_sales_city
+      xField: high_value_customer_churn_city
       yField: *id001
     eChartsConfig:
+      axes:
+      - position: bottom
+      - position: left
+        name: Total Revenue
       series:
       - type: bar
-        name: daily_sales_total_revenue_sum
+        name: Total Revenue
         encode:
           xRef:
-            field: daily_sales_city
+            field: high_value_customer_churn_city
           yRef:
-            field: daily_sales_total_revenue_sum
+            field: high_value_customer_churn_total_revenue_sum
 slug: total_revenue_by_city
 tableConfig:
   columnOrder:
-  - daily_sales_city
-  - daily_sales_total_revenue_sum
+  - high_value_customer_churn_city
+  - high_value_customer_churn_total_revenue_sum
 spaceSlug: home
 version: 1

@@ -1,5 +1,131 @@
 # Project Progress
 
+## Session 13 — Schema Quality + Chart Fixes (2026-04-04)
+
+### Fixes
+
+**`_write_schema_file` SQL parsing overhaul (`builder.py`)**
+- Added `_PLAIN_COL_RE` — CTE-based SQL produces plain `a.col` refs in the final SELECT; these now fall through to column-name heuristics instead of being misclassified as dimensions via `elif expr:`
+- Added `_RANK_COL_RE` — `*_rank` columns are always dimensions, never sum metrics even if they contain `revenue` in the name
+- Narrowed `_ID_COL_RE` to `_id$` only — `city`, `category`, `customer_type` no longer get spurious `count_distinct` metrics
+- Fixed `number` metric `sql:` field — only emitted when `_build_weighted_sql` actually substituted `${...}` refs; otherwise falls back to `average` (prevents broken Lightdash explore from referencing source columns that don't exist in the physical table)
+
+**DPM metric definitions (`planner.py`)**
+- Added `metric_definitions: dict[str, str]` to PRD model
+- Added Q5 to DPM: asks for definitions of ambiguous terms (`active`, `inactive`, `churn`, `retention`, `leaderboard`, `at risk`, etc.) before proceeding to actions
+- Skipped when all metrics are unambiguous
+- `_build_model_question` in `builder.py` now injects definitions into vanna's SQL question: `"active" means customer with ≥1 order in last 30 days`
+
+**Lightdash chart fixes (`lightdash.py`)**
+- Added `_field_label()` — strips model prefix + metric suffix from field IDs for readable y-axis labels (`customer_retention_risk_monitoring_total_revenue_sum` → `Total Revenue`)
+- Added `axes` section to `eChartsConfig` with human-readable left axis name
+- Added `_RANK_RE` — `*_rank` / `*_leaderboard_rank` columns excluded from `cat_cols` so they're never used as chart x-axis dimensions
+
+**Training data fixes (`train.py`)**
+- Fixed 2 wrong training pairs: `SUM(customer_count)` → `COUNT(DISTINCT customer_id)` from `stg_orders`
+- Added 4 new "revenue per customer" training pairs using `SUM(line_total) / NULLIF(COUNT(DISTINCT customer_id), 0)`
+- Added data availability doc: dataset covers 2026-03-04 to 2026-04-03 — no February data
+- Updated `customer_count` documentation with explicit warning against `SUM` for unique counts
+
+### E2E Result (fresh stack)
+```
+Q1  explore  COUNT(DISTINCT customer_id) from stg_orders ✓
+Q2  explore  customers with >1 order ✓
+Q3  explore  city drop — returns 1 row (no Feb comparison) ✓
+Q4  explore  SUM(line_total) / NULLIF(COUNT(DISTINCT customer_id), 0) ✓
+Q5  semantic correct data availability explanation ✓
+Q6  explore  bar chart (was scatter) ✓
+DPM 6-turn: Q5 definitions captured, metric_definitions in PRD ✓
+Build: 5 charts, new model scaffolded, dashboard URL returned ✓
+```
+
+---
+
+## Session 12 — Scaffold Model via SQL Generator (2026-04-03)
+
+### Problem
+Churn PRD metrics like "Active Customer Count", "Inactive Customer Count", "Customer Retention Rate" were silently passing `_uncovered_metrics()` with a 67% keyword score because `daily_sales` has `customer_count` — matching "customer" and "count" — even though `daily_sales` can't compute active/inactive breakdowns without `customer_id`.
+
+### Fix 1 — `_HARD_GRAIN_SIGNALS` in `builder.py`
+Added a two-stage check to `_uncovered_metrics()`:
+- Stage 1 (hard): keywords `active`, `inactive`, `churn`, `retention`, `leaderboard` unconditionally require `customer_id` to be physically present in the model. No keyword score can override this.
+- Stage 2: existing keyword-score check (threshold 0.5) as before.
+Also added `churn` and `retention` to `_GRAIN_SIGNALS` for grain inference.
+14 new tests in `tests/test_builder.py`. `conftest.py` updated with psycopg2 stub for local runs.
+
+### Fix 2 — `scaffold_model()` wired in `app.py`
+When `needs_new_model=True`, instead of returning an error message:
+1. `scaffold_model()` builds a natural-language question from PRD metrics + dimensions
+2. Calls `vn.generate_sql()` to generate the aggregation SQL
+3. Validates with `EXPLAIN` via psycopg2 (uses `bi_readonly` — SELECT perms sufficient for EXPLAIN)
+4. On validation failure: retries `vn.generate_sql()` with the PostgreSQL error as context (up to 3 attempts)
+5. `_wrap_as_dbt_model()` strips LIMIT, replaces schema-qualified refs with `{{ ref(...) }}`, adds config header
+6. Writes `.sql` file, runs `dbt run --target scaffold` (uses admin credentials)
+7. Returns model dict → pipeline continues to chart generation normally
+
+### Fix 3 — `scaffold` dbt target + admin credentials
+- Added `scaffold` target to `dbt/profiles.yml` reading `ANALYTICS_DB_ADMIN_USER` / `ANALYTICS_DB_ADMIN_PASSWORD`
+- Added those env vars to vanna service in `docker-compose.yml` (maps to `analytics` write user)
+- `scaffold_model()` passes `--target scaffold` to `dbt run`
+
+### Fix 4 — `--ignore-errors` on lightdash deploy
+Scaffolded models have no Lightdash dimension metadata → `lightdash deploy` was blocking with "No dimensions available". Added `--ignore-errors` to both `lightdash deploy` calls in `lightdash-deploy-entrypoint.sh`.
+
+### E2E result
+```
+PRD metrics: ['total revenue per customer', 'order count per customer',
+              'average order value', 'customer count by type (active vs inactive)',
+              'customer leaderboard by revenue']
+→ needs_new_model=True (active/inactive/leaderboard hard fail on daily_sales)
+→ vn.generate_sql() → EXPLAIN → dbt run --target scaffold
+→ model: transformed_marts.customer_churn_risk_revenue (new)
+→ charts_created: 5
+→ Dashboard URL returned ✓
+→ housekeeper: partial_uncovered (78% overlap with existing churn dashboard)
+```
+
+### Files changed
+- `vanna/agents/builder.py` — `_HARD_GRAIN_SIGNALS`, `_validate_sql()`, `_build_model_question()`, `_wrap_as_dbt_model()`, `scaffold_model()` rewritten
+- `vanna/app.py` — replaced early-return block with `scaffold_model()` call; added `DataModelResult` import
+- `dbt/profiles.yml` — added `scaffold` target
+- `docker-compose.yml` — added `ANALYTICS_DB_ADMIN_USER` / `ANALYTICS_DB_ADMIN_PASSWORD` to vanna env
+- `docker/lightdash-deploy-entrypoint.sh` — added `--ignore-errors` to deploy calls
+- `tests/test_builder.py` — 14 new tests for `_uncovered_metrics()`
+- `tests/conftest.py` — added psycopg2 stub
+
+---
+
+## Session 11 — Churn Analysis Gap Fixes (2026-03-24)
+
+### Open items from churn analysis testing — 2 of 4 fixed
+
+**Fix: Wrong chart type for leaderboard questions (`designer.py`)**
+- Root cause: result with 1 cat col + 2 num cols matched both `bar` and `scatter` structurally; LLM picked `scatter` for "top 10 customers" type questions
+- Fix: `_drop_scatter_if_ranking()` — pre-filters `scatter` out of the shortlist when question contains ranking keywords (`top/bottom/most/least/highest/lowest/rank/leaderboard/best/worst`) AND result has ≥1 categorical column
+- Deterministic — no LLM call. Correlation questions (no ranking keywords) keep scatter in the shortlist
+
+**Fix: Data Modeler silent failure for uncovered metrics (`builder.py` + `app.py`)**
+- Root cause: `run_data_modeler` set `needs_new_model=False` whenever any model was found, regardless of whether that model's columns covered the PRD metrics
+- Fix: `_uncovered_metrics(model, metrics)` — per-metric keyword fraction check (threshold 0.5); returns metrics where fewer than half their keywords match model columns/description
+  - Correctly flags "customer count by type (active vs inactive)" as uncovered (keywords: customer ✓, count ✓, type ✗, active ✗, inactive ✗ → 2/5 = 0.4 < 0.5)
+  - Does NOT flag "total revenue", "average order value" etc. (all keywords match)
+- `app.py` now returns distinct message for partial vs zero coverage: names the best-match model and lists the specific uncovered metrics; `uncovered_metrics[]` field added to response
+- `churn_test.py` prints `uncovered_metrics` when `needs_new_model=True`
+
+**Fix: Inconsistent PRD output across runs (`planner.py`)**
+- Root cause: DeepSeek default temperature ~1.0 + open-ended prompt letting LLM paraphrase user's metric list
+- Fix: `temperature=0` in `model_settings` + explicit instruction to copy user's metric/dimension names verbatim from Q4 answer
+- Result (3 runs): metrics now 100% consistent — all 5 verbatim ("total revenue per customer", "order count per customer", "average order value", "customer count by type (active vs inactive)", "customer leaderboard by revenue")
+- Title still has minor cosmetic variation (DeepSeek multi-turn temperature behaviour) — does not affect model selection, housekeeper, or chart generation
+- Commit: `fix(p3): stabilise DPM PRD output — temperature=0 + verbatim metrics`
+
+**Remaining open items (session 11)**
+- Mixed deployment (Coolify first-boot) — not yet tested end-to-end on VPS
+
+**Commit:** `fix(p2): leaderboard chart type + data modeler metric coverage check`
+
+---
+
 ## Session 10 — E2E Local Test + DPM Bug Fix (2026-03-24)
 
 ### E2E smoke test — full stack verified

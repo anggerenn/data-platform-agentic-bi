@@ -150,6 +150,22 @@ Replace with BM25 (rank-bm25) — no embedding model needed, ~60MB target.
 ### P3 — Found during E2E test (2026-03-24, session 10)
 - [x] **`DPMResponse` accepts `prd=null` when `status=complete`** (`planner.py`) — LLM occasionally omits PRD object but marks complete; fixed with `model_validator` that forces pydantic-ai retry
 
+---
+
+## Gap Fixes — Churn Analysis Testing (2026-03-24, session 11)
+
+### Untested — Mixed deployment (Coolify first-boot)
+- [ ] **LIGHTDASH_API_KEY lifecycle on Coolify** — first-boot: `lightdash-deploy` container prints PAT to logs; operator must manually copy token → set in Coolify env vars → restart vanna. This handoff has not been tested end-to-end on the VPS. Test plan: deploy fresh to Coolify with `LIGHTDASH_API_KEY=` empty, copy token from `lightdash-deploy` logs, set in Coolify, restart vanna, verify `/dashboard/build` succeeds.
+
+### P2 — Data Modeler silent failure for unsupported metrics
+- [x] **`needs_new_model` not triggered when PRD requests metrics absent from all models** (`builder.py`) — fixed with `_HARD_GRAIN_SIGNALS` dict (active/inactive/churn/retention/leaderboard require `customer_id` physically present); `_uncovered_metrics()` now two-stage: hard check first, keyword score second. When gap detected, `scaffold_model()` calls `vn.generate_sql()` to create the model, validates SQL with `EXPLAIN` + retry loop (up to 3 attempts), runs `dbt run --target scaffold` with admin credentials. `lightdash deploy` updated with `--ignore-errors` so scaffolded models without full Lightdash metadata don't block the deploy. E2E verified: churn dashboard builds on new `customer_churn_risk_revenue` model with 5 charts.
+
+### P2 — Wrong chart type for leaderboard questions
+- [x] **Q2 and Q6 return `scatter` chart instead of `bar`** (`designer.py`) — "Show me customers who ordered more than once" and "Show me top 10 customers by total revenue" both get `scatter` charts. These are ranking/leaderboard questions and should produce a horizontal `bar` chart. Fix: add a leaderboard pattern to the chart selection logic — if result has a name/ID column + a single numeric metric + no time dimension, prefer `bar` over `scatter`.
+
+### P3 — Inconsistent PRD output across runs
+- [x] **Same 5 DPM answers produce different PRD titles, metric counts, and housekeeper verdicts** — ran `churn_test.py` 3 times; PRD title varies ("Customer Churn Early Warning" vs "Customer Engagement & Churn Prevention"), metric count varies (4 vs 6 metrics), housekeeper verdict varies (`partial_covered` vs `none`). Root cause likely LLM temperature or vague DPM prompt. Fix options: (a) lower temperature on DPM agent, (b) tighten DPM system prompt to enumerate exactly which metrics to include based on stated exploration story, (c) canonicalise metric names via the instruction registry.
+
 ### P2 — Fragile / incomplete
 - [x] **`meta.grain` not declared** (`dbt/models/*/schema.yml`) — add `meta.grain` and `meta.relationships` to all models; update `builder.py` to use them instead of `_needs_customer_grain()` heuristic
 - [x] **Designer hardcodes model name** (`designer.py`) — replace `'deepseek-chat'` with `os.environ.get('VANNA_MODEL', 'deepseek-chat')`

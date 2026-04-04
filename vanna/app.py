@@ -21,7 +21,7 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 from agents.planner import run_dpm, PRD
-from agents.builder import run_data_modeler
+from agents.builder import run_data_modeler, scaffold_model, DataModelResult
 from agents.lightdash import create_dashboard, update_readme_tile
 from agents.housekeeper import check as housekeeper_check
 from agents.instructor import generate_guide, merge_guides
@@ -336,34 +336,23 @@ def dashboard_build():
         model_result = asyncio.run(run_data_modeler(prd, _DBT_PATH))
 
         if model_result.needs_new_model:
-            uncovered = model_result.uncovered_metrics
-            if model_result.model_name:
-                # Partial coverage — a model was found but some metrics are absent
-                missing_str = ", ".join(f'"{m}"' for m in uncovered)
-                msg = (
-                    f"The best matching model ({model_result.model_name}) does not cover "
-                    f"these metrics: {missing_str}. "
-                    "Add the SQL below as a new dbt model in dbt/models/, run dbt, then retry."
-                )
-                question = f"{prd.objective} — missing metrics: {', '.join(uncovered)}"
-            else:
-                # No model at all
-                msg = (
-                    "No existing dbt model covers these metrics. "
-                    "A new dbt model is needed to build this dashboard. "
-                    "Add the SQL below as a new model in dbt/models/, run dbt, then retry."
-                )
-                question = f"{prd.objective} — metrics: {', '.join(prd.metrics)}"
-            try:
-                suggested_sql = vn.generate_sql(question)
-            except Exception:
-                suggested_sql = None
-            return jsonify({
-                "needs_new_model": True,
-                "message": msg,
-                "suggested_sql": suggested_sql,
-                "uncovered_metrics": uncovered,
-            })
+            new_model_dict, scaffold_error = scaffold_model(
+                prd, model_result.required_grain, _DBT_PATH, vn=vn
+            )
+            if scaffold_error:
+                return jsonify({
+                    "error": f"Could not scaffold new model: {scaffold_error}",
+                    "uncovered_metrics": model_result.uncovered_metrics,
+                }), 500
+            model_result = DataModelResult(
+                model_name=new_model_dict['name'],
+                db_schema=new_model_dict['db_schema'],
+                columns=new_model_dict['columns'],
+                is_new=True,
+                needs_new_model=False,
+                uncovered_metrics=[],
+                required_grain=model_result.required_grain,
+            )
 
         # Housekeeper: advisory only — never blocks, user is the decision maker
         # model_name enables model-level structural comparison

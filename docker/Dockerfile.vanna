@@ -10,7 +10,8 @@ RUN pip install --no-cache-dir \
     python-dotenv \
     flask \
     docker \
-    pyyaml
+    pyyaml \
+    dbt-postgres
 
 COPY vanna/ .
 

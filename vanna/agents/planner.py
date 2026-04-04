@@ -12,8 +12,9 @@ class PRD(BaseModel):
     problem_statement: str
     objective: str
     audience: str
-    metrics: list[str]      # what you measure: aggregations (revenue, count, %)
-    dimensions: list[str] = []  # how you slice: grouping fields (city, category, date)
+    metrics: list[str]              # what you measure: aggregations (revenue, count, %)
+    dimensions: list[str] = []      # how you slice: grouping fields (city, category, date)
+    metric_definitions: dict[str, str] = {}  # metric name → business definition (for ambiguous terms)
     action_items: list[str]
 
 
@@ -45,7 +46,12 @@ Ask ONE short question at a time, in this exact order. Do NOT skip any:
 3. Target audience — who will use it?
 4. Key metrics AND dimensions — what numbers matter most (metrics = aggregations: revenue, count, %)
    AND how should they be sliced (dimensions = grouping fields: by city, by category, by date)?
-5. Desired actions — what should viewers DO after seeing the dashboard?
+5. Metric definitions — for any metric that contains ambiguous terms (active, inactive, churn, at risk,
+   retention, leaderboard, top, high-value, engaged, dormant), ask the user to define each one.
+   Example: "You mentioned 'active customer' and 'churn' — how do you define these?
+   e.g. active = ordered in last 30 days, churned = no order in 90 days"
+   If ALL metrics from Q4 are unambiguous (e.g. just "total revenue", "order count"), skip this question.
+6. Desired actions — what should viewers DO after seeing the dashboard?
 
 When generating the PRD:
 - Copy the user's metric names VERBATIM from their Q4 answer — do not paraphrase, merge, or rename them.
@@ -53,10 +59,12 @@ When generating the PRD:
 - Put aggregations in metrics (e.g. "Total Revenue", "Order Count").
 - Put grouping fields in dimensions (e.g. "City", "Category", "Order Date").
 - Do NOT mix them — customer_id is a dimension, not a metric.
+- Populate metric_definitions with the user's exact definitions from Q5 (metric name → definition string).
+  Only include metrics that the user explicitly defined. Leave empty if Q5 was skipped.
 - The title must directly reflect the dashboard's primary purpose in ≤6 words.
 
-You MUST receive an answer to all 5 before generating the PRD.
-Only respond with status="complete" after question 5 is answered.
+You MUST receive an answer to all required questions before generating the PRD.
+Only respond with status="complete" after the last required question is answered.
 Start by acknowledging the explored data and asking question 1.
 Keep messages short and conversational.""",
     )

@@ -1,12 +1,12 @@
 name: City Revenue Performance Dashboard
 description: ''
-updatedAt: '2026-03-06T12:03:47.000Z'
+updatedAt: '2026-03-24T11:32:27.000Z'
 tiles:
 - x: 0
   y: 8
   w: 36
   h: 5
-  tabUuid: 53538bce-d608-490c-94bd-52ab64161272
+  tabUuid: 2fef9146-f745-423b-998f-de488de07a87
   type: saved_chart
   properties:
     title: ''
@@ -14,11 +14,11 @@ tiles:
     chartSlug: total_revenue_trend
     chartName: Total Revenue Trend
   tileSlug: total_revenue_trend
-- x: 18
+- x: 0
   y: 3
   w: 18
   h: 5
-  tabUuid: 53538bce-d608-490c-94bd-52ab64161272
+  tabUuid: 2fef9146-f745-423b-998f-de488de07a87
   type: saved_chart
   properties:
     title: ''
@@ -26,11 +26,11 @@ tiles:
     chartSlug: total_revenue_by_category
     chartName: Total Revenue by Category
   tileSlug: total_revenue_by_category
-- x: 0
+- x: 18
   y: 3
   w: 18
   h: 5
-  tabUuid: 53538bce-d608-490c-94bd-52ab64161272
+  tabUuid: 2fef9146-f745-423b-998f-de488de07a87
   type: saved_chart
   properties:
     title: ''
@@ -42,7 +42,7 @@ tiles:
   y: 0
   w: 36
   h: 3
-  tabUuid: 53538bce-d608-490c-94bd-52ab64161272
+  tabUuid: 2fef9146-f745-423b-998f-de488de07a87
   type: saved_chart
   properties:
     title: ''
@@ -54,49 +54,49 @@ tiles:
   y: 0
   w: 36
   h: 12
-  tabUuid: 7d111ec4-894a-42fe-b483-e19b1dd2533d
+  tabUuid: 841ea25c-4f52-4748-989b-d7cf5bbb7c8d
   type: markdown
   properties:
     title: How to use this dashboard
     hideTitle: false
     content: '## Overview
 
-      This dashboard shows total revenue performance across cities, product categories,
-      and time periods, helping sales managers identify top-performing regions and
-      track revenue trends to optimize sales strategies.
+      This dashboard tracks daily revenue performance across cities to help sales
+      managers quickly identify underperforming markets and optimize resource allocation,
+      enabling proactive intervention before revenue declines become significant.
 
 
       ## Questions this answers
 
-      - Which city generated the highest total revenue in the selected date range?
+      - Which city had the biggest revenue drop compared to last month?
 
-      - What product category drives the most revenue in a specific city?
+      - What categories are driving revenue growth in our top-performing cities?
 
-      - How has revenue trended over time for a particular city or category?
+      - Which cities are consistently underperforming across all product categories?
 
-      - Which city-category combinations are underperforming compared to others?
+      - How does weekend revenue compare to weekday revenue in specific cities?
 
-      - What is the revenue distribution across different product categories for the
-      current quarter?
+      - Which cities show the strongest month-over-month growth in specific categories?
 
 
       ## Tips
 
-      - Use the date range filter to compare performance across different time periods
-      (e.g., Q1 vs Q2, this year vs last year)
+      - Use the Order Date filter to compare performance between weekdays and weekends,
+      as some cities may have different shopping patterns based on day of week
 
-      - Combine city and category filters together to drill down into specific market
-      segments and identify growth opportunities'
+      - Drill down into specific categories when investigating underperforming cities
+      to identify whether the issue is isolated to particular product lines or affecting
+      all categories'
     hideFrame: false
 filters:
   metrics: []
   dimensions: []
   tableCalculations: []
 tabs:
-- uuid: 53538bce-d608-490c-94bd-52ab64161272
+- uuid: 2fef9146-f745-423b-998f-de488de07a87
   name: Dashboard
   order: 0
-- uuid: 7d111ec4-894a-42fe-b483-e19b1dd2533d
+- uuid: 841ea25c-4f52-4748-989b-d7cf5bbb7c8d
   name: README.md
   order: 1
 slug: city_revenue_performance_dashboard

@@ -20,6 +20,7 @@ for _c in _candidates:
         sys.path.insert(0, os.path.abspath(_c))
         break
 
-# Stub the ClickHouse-connecting module before app.py imports it
+# Stub modules not available in local (non-Docker) environment
 _mock_vanna = MagicMock()
 sys.modules['vn'] = MagicMock(get_vanna=lambda: _mock_vanna, VannaLite=MagicMock)
+sys.modules.setdefault('psycopg2', MagicMock())

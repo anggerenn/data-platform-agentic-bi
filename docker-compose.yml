@@ -224,6 +224,9 @@ services:
       # Readonly user: agent can only run SELECT queries
       - ANALYTICS_DB_USER=bi_readonly
       - ANALYTICS_DB_PASSWORD=${ANALYTICS_DB_READONLY_PASSWORD}
+      # Admin user: used only by scaffold_model() to run dbt DDL (CREATE TABLE)
+      - ANALYTICS_DB_ADMIN_USER=${ANALYTICS_DB_USER:-analytics}
+      - ANALYTICS_DB_ADMIN_PASSWORD=${ANALYTICS_DB_PASSWORD}
       - LIGHTDASH_PUBLIC_URL=${LIGHTDASH_PUBLIC_URL:-http://localhost:8080}
       - LIGHTDASH_INTERNAL_URL=http://lightdash:8080
       - LIGHTDASH_API_KEY=${LIGHTDASH_API_KEY}

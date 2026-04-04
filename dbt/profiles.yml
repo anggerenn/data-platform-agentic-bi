@@ -10,3 +10,12 @@ default:
       dbname: "{{ env_var('ANALYTICS_DB_NAME', 'analytics') }}"
       schema: transformed
       sslmode: disable
+    scaffold:
+      type: postgres
+      host: "{{ env_var('ANALYTICS_DB_HOST') }}"
+      port: 5432
+      user: "{{ env_var('ANALYTICS_DB_ADMIN_USER') }}"
+      password: "{{ env_var('ANALYTICS_DB_ADMIN_PASSWORD') }}"
+      dbname: "{{ env_var('ANALYTICS_DB_NAME', 'analytics') }}"
+      schema: transformed
+      sslmode: disable

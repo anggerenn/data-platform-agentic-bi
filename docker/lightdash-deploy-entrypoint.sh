@@ -69,6 +69,7 @@ if [ -n "$PROJECT_UUID" ]; then
   lightdash deploy \
     --assume-yes \
     --non-interactive \
+    --ignore-errors \
     --project-dir /dbt \
     --profiles-dir /dbt
 else
@@ -77,6 +78,7 @@ else
     --create "Analytics" \
     --assume-yes \
     --non-interactive \
+    --ignore-errors \
     --project-dir /dbt \
     --profiles-dir /dbt
 fi

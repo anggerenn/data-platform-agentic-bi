@@ -38,11 +38,33 @@ def _slugify(text: str) -> str:
     return re.sub(r'[^a-z0-9]+', '_', text.lower()).strip('_')
 
 
+_RANK_RE = re.compile(r'(_rank|_leaderboard_rank)$', re.I)
+
+
 def _classify_columns(columns: list[str]) -> dict:
     date_cols = [c for c in columns if _DATE_RE.search(c)]
     num_cols = [c for c in columns if _NUM_RE.search(c) and c not in date_cols]
-    cat_cols = [c for c in columns if c not in date_cols and c not in num_cols]
+    # Exclude rank columns from cat_cols — they're ordinal numbers, not meaningful categories
+    cat_cols = [
+        c for c in columns
+        if c not in date_cols and c not in num_cols and not _RANK_RE.search(c)
+    ]
     return {'date': date_cols, 'num': num_cols, 'cat': cat_cols}
+
+
+def _field_label(field_id: str, model_name: str) -> str:
+    """Strip model prefix and metric suffix from a field ID to get a readable label.
+    e.g. 'my_model_total_revenue_sum' → 'Total Revenue'
+    """
+    label = field_id
+    if label.startswith(model_name + '_'):
+        label = label[len(model_name) + 1:]
+    # Strip common metric suffixes
+    for suffix in ('_sum', '_count', '_count_distinct', '_average', '_min', '_max', '_number'):
+        if label.endswith(suffix):
+            label = label[:-len(suffix)]
+            break
+    return label.replace('_', ' ').title()
 
 
 def _metric_keywords(metrics: list[str]) -> set:
@@ -88,6 +110,7 @@ def _plan_charts(model_name: str, columns: list[str], metrics: list[str], dimens
             "metrics": [met(primary)],
             "sorts": [{"fieldId": dim(date_col), "descending": False}],
             "type": "line",
+            "model_name": model_name,
         })
 
     # Category breakdowns
@@ -100,6 +123,7 @@ def _plan_charts(model_name: str, columns: list[str], metrics: list[str], dimens
                 "metrics": [met(primary)],
                 "sorts": [{"fieldId": met(primary), "descending": True}],
                 "type": "bar",
+                "model_name": model_name,
             })
 
     # Total KPI — avoid "Total Total Revenue" double-word
@@ -111,6 +135,7 @@ def _plan_charts(model_name: str, columns: list[str], metrics: list[str], dimens
         "metrics": [met(primary)],
         "sorts": [],
         "type": "big_number",
+        "model_name": model_name,
     })
 
     return charts[:6]
@@ -120,6 +145,7 @@ def _plan_charts(model_name: str, columns: list[str], metrics: list[str], dimens
 
 def _chart_config(spec: dict) -> dict:
     chart_type = spec["type"]
+    model_name = spec.get("model_name", "")
     if chart_type == "big_number":
         return {
             "type": "big_number",
@@ -130,20 +156,26 @@ def _chart_config(spec: dict) -> dict:
         }
     x_field = spec["dimensions"][0] if spec["dimensions"] else None
     y_fields = spec["metrics"]
+    y_field = y_fields[0] if y_fields else ""
+    y_label = _field_label(y_field, model_name)
     plotly_type = "line" if chart_type == "line" else "bar"
     return {
         "type": "cartesian",
         "config": {
             "layout": {"xField": x_field, "yField": y_fields},
             "eChartsConfig": {
+                "axes": [
+                    {"position": "bottom"},
+                    {"position": "left", "name": y_label},
+                ],
                 "series": [{
                     "type": plotly_type,
-                    "name": y_fields[0] if y_fields else "",
+                    "name": y_label,
                     "encode": {
                         "xRef": {"field": x_field},
-                        "yRef": {"field": y_fields[0] if y_fields else ""},
+                        "yRef": {"field": y_field},
                     },
-                }]
+                }],
             },
         },
     }

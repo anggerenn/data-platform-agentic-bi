@@ -1,7 +1,0 @@
-FROM apache/superset:4.1.4
-
-USER root
-
-RUN pip install duckdb==1.1.3 duckdb-engine==0.13.4 superset-api-client==0.6.0
-
-USER superset

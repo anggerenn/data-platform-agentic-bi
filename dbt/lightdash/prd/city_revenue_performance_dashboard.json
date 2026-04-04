@@ -1,24 +1,25 @@
 {
   "title": "City Revenue Performance Dashboard",
-  "objective": "Track total revenue performance broken down by city, product category, and over time to identify top-performing regions and trends",
-  "audience": "Sales managers and regional heads",
+  "problem_statement": "Sales managers currently don't know which cities are underperforming until it's too late, leading to delayed responses and missed revenue opportunities.",
+  "objective": "Monitor daily revenue by city to catch performance drops early, enabling proactive investigation and resource reallocation.",
+  "audience": "Sales managers responsible for city-level performance monitoring and optimization.",
   "metrics": [
-    "total revenue",
-    "revenue by city",
-    "revenue by category",
-    "revenue trend over time"
+    "Total Revenue",
+    "Month-over-Month Growth",
+    "Revenue by Category"
   ],
-  "filters": [
-    "date range",
-    "city",
-    "category"
+  "dimensions": [
+    "City",
+    "Order Date",
+    "Category"
   ],
   "action_items": [
-    "Identify cities driving the most revenue",
-    "Compare category performance across regions",
-    "Spot revenue trends and seasonality"
+    "Investigate underperforming cities immediately upon detection",
+    "Reallocate sales resources and marketing budgets to struggling cities",
+    "Identify and replicate successful strategies from high-performing cities",
+    "Set up alerts for significant revenue drops by city"
   ],
-  "built_at": "2026-03-06T00:00:00Z",
-  "dashboard_url": "http://localhost:8080/projects/77f5a63a-8106-48be-a9af-fe41ff976084/dashboards/8baa09fa-f9a0-427c-b448-fae73f3831e3/view",
+  "built_at": "2026-03-24T11:32:51.827286Z",
+  "dashboard_url": "http://localhost:8080/projects",
   "model": "daily_sales"
 }

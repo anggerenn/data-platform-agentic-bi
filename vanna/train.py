@@ -54,6 +54,14 @@ For order-level detail use transformed_staging.stg_orders.
 """)
 
 vn.train(documentation="""
+Data availability:
+- The dataset currently covers 2026-03-04 to 2026-04-03 (approximately 1 month).
+- There is NO data before March 2026 — do not query February 2026 or earlier.
+- Month-over-month comparisons are not possible with this dataset.
+- For current month analysis use: order_date >= '2026-03-01' AND order_date < '2026-04-01'
+""")
+
+vn.train(documentation="""
 PostgreSQL date rules:
 - Use DATE_TRUNC('month', col) to get the first day of the month
 - Use EXTRACT(day FROM col) for day-of-month, EXTRACT(year FROM col) for year
@@ -80,8 +88,10 @@ Columns in transformed_marts.daily_sales:
   Examples: DATE_TRUNC('month', order_date), EXTRACT(year FROM order_date), order_date >= '2024-01-01'
 - category: product category (e.g. Electronics, Clothing, Food, Books)
 - city: city where orders were placed (e.g. New York, Los Angeles, Chicago, Houston)
-- order_count: number of distinct orders that day
-- customer_count: number of distinct customers that day
+- order_count: number of distinct orders that day (per date/category/city row)
+- customer_count: number of distinct customers that day (per date/category/city row).
+  WARNING: SUM(customer_count) double-counts customers who appear on multiple days or categories.
+  For true unique customer counts always use COUNT(DISTINCT customer_id) from transformed_staging.stg_orders.
 - units_sold: total units sold that day
 - revenue: sum of unit prices (excludes quantity multiplier)
 - total_revenue: sum of (amount * quantity) — the correct revenue metric
@@ -207,8 +217,8 @@ vn.train(
     sql="""
 SELECT
     city,
-    SUM(customer_count) AS total_customers
-FROM transformed_marts.daily_sales
+    COUNT(DISTINCT customer_id) AS total_customers
+FROM transformed_staging.stg_orders
 GROUP BY city
 ORDER BY total_customers DESC
 """)
@@ -217,8 +227,8 @@ vn.train(
     question="Show me total unique customers in march 2026",
     sql="""
 SELECT
-    SUM(customer_count) AS total_customers
-FROM transformed_marts.daily_sales
+    COUNT(DISTINCT customer_id) AS total_customers
+FROM transformed_staging.stg_orders
 WHERE order_date >= '2026-03-01' AND order_date < '2026-04-01'
 """)
 
@@ -335,6 +345,50 @@ SELECT
 FROM transformed_marts.daily_sales
 GROUP BY city
 ORDER BY city_revenue DESC
+""")
+
+vn.train(
+    question="What is the average revenue per customer by city?",
+    sql="""
+SELECT
+    city,
+    SUM(line_total) / NULLIF(COUNT(DISTINCT customer_id), 0) AS revenue_per_customer
+FROM transformed_staging.stg_orders
+GROUP BY city
+ORDER BY revenue_per_customer DESC
+""")
+
+vn.train(
+    question="Show me revenue per customer by category",
+    sql="""
+SELECT
+    category,
+    SUM(line_total) / NULLIF(COUNT(DISTINCT customer_id), 0) AS revenue_per_customer
+FROM transformed_staging.stg_orders
+GROUP BY category
+ORDER BY revenue_per_customer DESC
+""")
+
+vn.train(
+    question="What is the total revenue per customer overall?",
+    sql="""
+SELECT
+    SUM(line_total) / NULLIF(COUNT(DISTINCT customer_id), 0) AS revenue_per_customer
+FROM transformed_staging.stg_orders
+""")
+
+vn.train(
+    question="Show me each customer's total revenue",
+    sql="""
+SELECT
+    customer_id,
+    city,
+    category,
+    SUM(line_total) AS total_revenue,
+    COUNT(DISTINCT order_id) AS order_count
+FROM transformed_staging.stg_orders
+GROUP BY customer_id, city, category
+ORDER BY total_revenue DESC
 """)
 
 vn.train(
