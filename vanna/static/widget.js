@@ -102,21 +102,20 @@
   }
 
   /* ── Main content area adjustment ───────────────────────────────── */
-  // Mantine AppShell flex layout: margin-right on <main> doesn't compress it.
-  // max-width constrains the element regardless of flex/block context.
-  // Target both <main> and #root to cover the full React tree.
+  // Lightdash dashboard grid uses react-grid-layout with absolutely-positioned
+  // tiles at fixed pixel widths. CSS parent resizing alone won't move them —
+  // we must constrain #page-root then fire window.resize so react-grid-layout
+  // recomputes tile widths from the new container offsetWidth.
   function shiftMain(shift) {
-    var targets = [
-      document.querySelector('main'),
-      document.getElementById('root'),
-    ];
-    targets.forEach(function (el) {
-      if (!el) return;
-      el.style.transition = 'max-width ' + EASE;
-      el.style.maxWidth = shift ? 'calc(100vw - ' + PANEL_WIDTH + ')' : '';
-    });
-    var main = document.querySelector('main');
-    if (main) main.style.overflowX = shift ? 'hidden' : '';
+    var pageRoot = document.getElementById('page-root');
+    if (pageRoot) {
+      pageRoot.style.transition = 'max-width ' + EASE;
+      pageRoot.style.maxWidth = shift ? 'calc(100vw - ' + PANEL_WIDTH + ')' : '';
+    }
+    // Give the CSS transition a head-start, then trigger grid reflow
+    setTimeout(function () {
+      window.dispatchEvent(new Event('resize'));
+    }, 50);
   }
 
   /* ── Toggle logic ───────────────────────────────────────────────── */
