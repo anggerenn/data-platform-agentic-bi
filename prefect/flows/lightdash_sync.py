@@ -23,10 +23,16 @@ _REPO_PATH = '/repo'
 
 
 def _find_lightdash_deploy_image(client):
-    """Return the first local image tag containing 'lightdash-deploy', or fall back to env var."""
+    """Find the lightdash-deploy image via env var, container name, or image tag."""
     override = os.environ.get('LIGHTDASH_DEPLOY_IMAGE')
     if override:
         return override
+    # Most reliable on Coolify: find the image used by the lightdash-deploy container
+    for container in client.containers.list(all=True):
+        if 'lightdash-deploy' in container.name:
+            tags = container.image.tags
+            return tags[0] if tags else container.image.id
+    # Fallback: search image tags
     for img in client.images.list():
         for tag in img.tags:
             if 'lightdash-deploy' in tag:
