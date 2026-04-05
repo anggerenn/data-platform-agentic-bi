@@ -1,0 +1,32 @@
+# Coolify-specific overrides — not valid Docker Compose spec.
+# Applied via Coolify's compose merge, never used locally.
+services:
+  postgres:
+    exclude_from_hc: true
+
+  analytics-db:
+    exclude_from_hc: true
+
+  lightdash-db:
+    exclude_from_hc: true
+
+  minio:
+    exclude_from_hc: true
+
+  minio-init:
+    exclude_from_hc: true
+
+  prefect-worker:
+    exclude_from_hc: true
+
+  pipeline-init:
+    exclude_from_hc: true
+
+  lightdash-deploy:
+    exclude_from_hc: true
+
+  vanna:
+    exclude_from_hc: true
+
+  smoke-test:
+    exclude_from_hc: true

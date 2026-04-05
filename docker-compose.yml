@@ -1,7 +1,6 @@
 services:
   postgres:
     image: postgres:15
-    exclude_from_hc: true
     environment:
       POSTGRES_USER: prefect
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-prefect}
@@ -36,7 +35,6 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.prefect
-    exclude_from_hc: true
     depends_on:
       prefect-server:
         condition: service_healthy
@@ -65,7 +63,6 @@ services:
 
   analytics-db:
     image: postgres:15
-    exclude_from_hc: true
     environment:
       POSTGRES_USER: ${ANALYTICS_DB_USER:-analytics}
       POSTGRES_PASSWORD: ${ANALYTICS_DB_PASSWORD:-changeme}
@@ -80,7 +77,6 @@ services:
 
   minio:
     image: minio/minio:latest
-    exclude_from_hc: true
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
@@ -93,7 +89,6 @@ services:
 
   minio-init:
     image: minio/mc:latest
-    exclude_from_hc: true
     depends_on:
       - minio
     entrypoint: >
@@ -108,7 +103,6 @@ services:
 
   lightdash-db:
     image: postgres:15
-    exclude_from_hc: true
     environment:
       POSTGRES_USER: lightdash
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-prefect}
@@ -160,7 +154,6 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.prefect
-    exclude_from_hc: true
     depends_on:
       prefect-server:
         condition: service_healthy
@@ -188,7 +181,6 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.lightdash-deploy
-    exclude_from_hc: true
     working_dir: /dbt
     depends_on:
       lightdash:
@@ -215,7 +207,6 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.vanna
-    exclude_from_hc: true
     environment:
       - ANALYTICS_DB_HOST=analytics-db
       - ANALYTICS_DB_PORT=5432
@@ -247,7 +238,6 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.vanna
-    exclude_from_hc: true
     depends_on:
       pipeline-init:
         condition: service_completed_successfully
