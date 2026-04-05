@@ -102,19 +102,21 @@
   }
 
   /* ── Main content area adjustment ───────────────────────────────── */
-  // Lightdash (Mantine AppShell) renders scrollable content inside <main>.
-  // Targeting it directly is more reliable than body/html padding tricks.
-  function getMainEl() {
-    return document.querySelector('main') ||
-           document.querySelector('[role="main"]') ||
-           document.querySelector('#root > div > div');
-  }
-
+  // Mantine AppShell flex layout: margin-right on <main> doesn't compress it.
+  // max-width constrains the element regardless of flex/block context.
+  // Target both <main> and #root to cover the full React tree.
   function shiftMain(shift) {
-    var el = getMainEl();
-    if (!el) return;
-    el.style.transition = 'margin-right ' + EASE;
-    el.style.marginRight = shift ? PANEL_WIDTH : '';
+    var targets = [
+      document.querySelector('main'),
+      document.getElementById('root'),
+    ];
+    targets.forEach(function (el) {
+      if (!el) return;
+      el.style.transition = 'max-width ' + EASE;
+      el.style.maxWidth = shift ? 'calc(100vw - ' + PANEL_WIDTH + ')' : '';
+    });
+    var main = document.querySelector('main');
+    if (main) main.style.overflowX = shift ? 'hidden' : '';
   }
 
   /* ── Toggle logic ───────────────────────────────────────────────── */
