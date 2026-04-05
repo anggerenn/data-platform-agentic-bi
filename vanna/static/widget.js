@@ -82,14 +82,14 @@
     open = true;
     panel.classList.add('open');
     document.documentElement.style.paddingRight = PANEL_WIDTH;
-    fab.style.right = 'calc(' + PANEL_WIDTH + ' + 24px)';
+    fab.style.display = 'none';
   }
 
   function closePanel() {
     open = false;
     panel.classList.remove('open');
     document.documentElement.style.paddingRight = '';
-    fab.style.right = '';
+    fab.style.display = '';
   }
 
   fab.addEventListener('click', openPanel);

@@ -18,7 +18,7 @@ import docker
 from prefect import flow, task
 
 
-_LIGHTDASH_IMAGE = 'data-platform-lightdash-deploy'
+_LIGHTDASH_IMAGE = os.environ.get('LIGHTDASH_DEPLOY_IMAGE', 'data-platform-lightdash-deploy')
 _NETWORK = 'data-platform_data-network'
 _REPO_PATH = '/repo'
 

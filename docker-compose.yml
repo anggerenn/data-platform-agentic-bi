@@ -50,6 +50,7 @@ services:
       ANALYTICS_DB_PASSWORD: ${ANALYTICS_DB_PASSWORD}
       LIGHTDASH_INTERNAL_URL: "http://lightdash:8080"
       LIGHTDASH_API_KEY: ${LIGHTDASH_API_KEY}
+      LIGHTDASH_DEPLOY_IMAGE: ${LIGHTDASH_DEPLOY_IMAGE:-data-platform-lightdash-deploy}
       GIT_AUTHOR_NAME: "Lightdash Sync"
       GIT_AUTHOR_EMAIL: "sync@data-platform"
       GIT_COMMITTER_NAME: "Lightdash Sync"

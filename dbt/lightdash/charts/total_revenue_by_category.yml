@@ -1,16 +1,16 @@
 name: Total Revenue by Category
 description: Total Revenue by Category
-tableName: customer_retention_churn_prevention
-updatedAt: '2026-04-04T04:20:28.000Z'
+tableName: daily_sales
+updatedAt: '2026-03-24T10:38:41.000Z'
 metricQuery:
-  exploreName: customer_retention_churn_prevention
+  exploreName: daily_sales
   dimensions:
-  - customer_retention_churn_prevention_category
+  - daily_sales_category
   metrics: &id001
-  - customer_retention_churn_prevention_total_revenue_sum
+  - daily_sales_total_revenue_sum
   filters: {}
   sorts:
-  - fieldId: customer_retention_churn_prevention_total_revenue_sum
+  - fieldId: daily_sales_total_revenue_sum
     descending: true
   limit: 500
   metricOverrides: {}
@@ -22,7 +22,7 @@ chartConfig:
   type: cartesian
   config:
     layout:
-      xField: customer_retention_churn_prevention_category
+      xField: daily_sales_category
       yField: *id001
     eChartsConfig:
       axes:
@@ -34,13 +34,13 @@ chartConfig:
         name: Total Revenue
         encode:
           xRef:
-            field: customer_retention_churn_prevention_category
+            field: daily_sales_category
           yRef:
-            field: customer_retention_churn_prevention_total_revenue_sum
+            field: daily_sales_total_revenue_sum
 slug: total_revenue_by_category
 tableConfig:
   columnOrder:
-  - customer_retention_churn_prevention_category
-  - customer_retention_churn_prevention_total_revenue_sum
+  - daily_sales_category
+  - daily_sales_total_revenue_sum
 spaceSlug: home
 version: 1
