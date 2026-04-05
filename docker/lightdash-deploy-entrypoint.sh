@@ -5,6 +5,36 @@
 LIGHTDASH_URL="${LIGHTDASH_URL:-http://lightdash:8080}"
 COOKIE_JAR="/tmp/lightdash-cookies.txt"
 
+# Ensure bi_readonly user exists with the correct password
+echo "==> Provisioning bi_readonly DB user..."
+python3 - <<'PYEOF'
+import os, sys
+try:
+    import psycopg2
+    conn = psycopg2.connect(
+        host=os.environ['ANALYTICS_DB_HOST'],
+        port=int(os.environ.get('ANALYTICS_DB_PORT', 5432)),
+        dbname=os.environ['ANALYTICS_DB_NAME'],
+        user=os.environ['ANALYTICS_DB_ADMIN_USER'],
+        password=os.environ['ANALYTICS_DB_ADMIN_PASSWORD'],
+    )
+    conn.autocommit = True
+    cur = conn.cursor()
+    password = os.environ['ANALYTICS_DB_PASSWORD']
+    cur.execute("SELECT 1 FROM pg_roles WHERE rolname='bi_readonly'")
+    if cur.fetchone():
+        cur.execute("ALTER USER bi_readonly WITH PASSWORD %s", (password,))
+        print("    bi_readonly password synced.")
+    else:
+        cur.execute("CREATE USER bi_readonly WITH PASSWORD %s", (password,))
+        cur.execute("GRANT CONNECT ON DATABASE analytics TO bi_readonly")
+        cur.execute("GRANT pg_read_all_data TO bi_readonly")
+        print("    bi_readonly created.")
+    conn.close()
+except Exception as e:
+    print(f"    WARNING: could not provision bi_readonly: {e}")
+PYEOF
+
 if [ -z "$LIGHTDASH_API_KEY" ]; then
   echo "==> No LIGHTDASH_API_KEY — running first-boot registration..."
 
