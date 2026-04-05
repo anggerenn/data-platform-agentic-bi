@@ -169,6 +169,7 @@ services:
       ANALYTICS_DB_NAME: ${ANALYTICS_DB_NAME:-analytics}
       ANALYTICS_DB_USER: ${ANALYTICS_DB_USER:-analytics}
       ANALYTICS_DB_PASSWORD: ${ANALYTICS_DB_PASSWORD}
+      DBT_PROJECT_DIR: /opt/prefect/dbt
     volumes:
       - ${PIPELINES_DATA:-pipelines_data}:/data
       - ./dbt:/opt/prefect/dbt:ro
