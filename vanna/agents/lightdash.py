@@ -378,7 +378,6 @@ def _trigger_deploy(host_dbt_path: str, network: str) -> tuple[bool, str]:
         }
         volumes = {
             host_dbt_path: {'bind': '/dbt', 'mode': 'rw'},
-            f"{host_dbt_path}/profiles.yml": {'bind': '/root/.dbt/profiles.yml', 'mode': 'ro'},
         }
 
         logs = client.containers.run(

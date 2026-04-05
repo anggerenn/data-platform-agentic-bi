@@ -22,4 +22,4 @@ EXPOSE 8084
 
 # If the /dbt bind mount is empty (no dbt_project.yml), seed it from the baked copy.
 # This handles Coolify deployments where ./dbt resolves to a fresh empty host directory.
-CMD ["sh", "-c", "[ -f /dbt/dbt_project.yml ] || cp -a /dbt-baked/. /dbt/ ; rm -rf /data/vanna-chroma/* && python train.py && python app.py"]
+CMD ["sh", "-c", "[ -d /dbt/profiles.yml ] && rm -rf /dbt/profiles.yml; [ -f /dbt/dbt_project.yml ] || cp -a /dbt-baked/. /dbt/; [ -f /dbt/profiles.yml ] || cp /dbt-baked/profiles.yml /dbt/profiles.yml; rm -rf /data/vanna-chroma/* && python train.py && python app.py"]
