@@ -10,7 +10,8 @@
 
   var style = document.createElement('style');
   style.textContent = [
-    'html{box-sizing:border-box;transition:padding-right ' + EASE + ';}',
+    'html,body{box-sizing:border-box;}',
+    'body{transition:padding-right ' + EASE + ';}',
 
     '#vanna-fab{',
       'position:fixed;bottom:24px;right:24px;',
@@ -109,7 +110,7 @@
     open = true;
     collectFixedEls();
     panel.classList.add('open');
-    document.documentElement.style.paddingRight = PANEL_WIDTH;
+    document.body.style.paddingRight = PANEL_WIDTH;
     shiftFixed(true);
     fab.style.display = 'none';
   }
@@ -117,7 +118,7 @@
   function closePanel() {
     open = false;
     panel.classList.remove('open');
-    document.documentElement.style.paddingRight = '';
+    document.body.style.paddingRight = '';
     shiftFixed(false);
     fab.style.display = '';
   }
