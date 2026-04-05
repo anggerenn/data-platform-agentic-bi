@@ -12,7 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir dbt-postgres
 
 # Install Lightdash CLI (pinned to match server image)
-RUN npm install -g @lightdash/cli@0.2473.1
+# Cap Node memory during install to avoid OOM on low-RAM VPS
+RUN NODE_OPTIONS="--max-old-space-size=512" npm install -g @lightdash/cli@0.2473.1
 
 # Copy and set entrypoint script
 COPY docker/lightdash-deploy-entrypoint.sh /entrypoint.sh
