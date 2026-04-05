@@ -14,7 +14,10 @@ RUN pip install --no-cache-dir \
     dbt-postgres
 
 COPY vanna/ .
+COPY dbt/ /dbt-baked/
 
 EXPOSE 8084
 
-CMD ["sh", "-c", "rm -rf /data/vanna-chroma/* && python train.py && python app.py"]
+# If the /dbt bind mount is empty (no dbt_project.yml), seed it from the baked copy.
+# This handles Coolify deployments where ./dbt resolves to a fresh empty host directory.
+CMD ["sh", "-c", "[ -f /dbt/dbt_project.yml ] || cp -rn /dbt-baked/. /dbt/ ; rm -rf /data/vanna-chroma/* && python train.py && python app.py"]
