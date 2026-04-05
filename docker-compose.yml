@@ -225,6 +225,7 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - VANNA_MODEL=${VANNA_MODEL:-deepseek-chat}
       - CHROMA_PATH=/data/vanna-chroma
+      - DBT_PATH=/dbt
     volumes:
       - ${VANNA_DATA:-vanna_data}:/data
       - ${CHROMA_CACHE:-chroma_cache_data}:/root/.cache/chroma

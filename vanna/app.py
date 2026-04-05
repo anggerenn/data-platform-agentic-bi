@@ -44,7 +44,7 @@ threading.Thread(target=_warmup, daemon=True).start()
 
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), 'static')
 _LIGHTDASH_URL = os.environ['LIGHTDASH_PUBLIC_URL']
-_DBT_PATH = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'dbt'))
+_DBT_PATH = os.environ.get('DBT_PATH', '/dbt')
 
 MAX_HISTORY = 20  # sliding window: keep last N messages per session
 
