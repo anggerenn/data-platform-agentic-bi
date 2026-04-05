@@ -284,6 +284,48 @@ ORDER BY total_revenue DESC
 """)
 
 vn.train(
+    question="How many customers are churned / not ordering in the last 30 days?",
+    sql="""
+SELECT COUNT(*) AS churned_customers
+FROM (
+    SELECT customer_id
+    FROM transformed_staging.stg_orders
+    GROUP BY customer_id
+    HAVING MAX(order_date) < CURRENT_DATE - INTERVAL '30 days'
+) churned
+""")
+
+vn.train(
+    question="Which customers have not ordered in the last 30 days?",
+    sql="""
+SELECT
+    customer_id,
+    MAX(order_date) AS last_order_date,
+    CURRENT_DATE - MAX(order_date) AS days_since_last_order
+FROM transformed_staging.stg_orders
+GROUP BY customer_id
+HAVING MAX(order_date) < CURRENT_DATE - INTERVAL '30 days'
+ORDER BY days_since_last_order DESC
+""")
+
+vn.train(
+    question="Show me churn rate: percentage of customers who haven't ordered in the last 30 days",
+    sql="""
+SELECT
+    COUNT(DISTINCT CASE WHEN last_order < CURRENT_DATE - INTERVAL '30 days' THEN customer_id END) AS churned_customers,
+    COUNT(DISTINCT customer_id) AS total_customers,
+    ROUND(
+        (COUNT(DISTINCT CASE WHEN last_order < CURRENT_DATE - INTERVAL '30 days' THEN customer_id END)::NUMERIC
+        / NULLIF(COUNT(DISTINCT customer_id), 0) * 100)::NUMERIC, 2
+    ) AS churn_rate_pct
+FROM (
+    SELECT customer_id, MAX(order_date) AS last_order
+    FROM transformed_staging.stg_orders
+    GROUP BY customer_id
+) sub
+""")
+
+vn.train(
     question="How many total units were sold in march 2026?",
     sql="""
 SELECT

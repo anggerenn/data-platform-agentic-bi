@@ -18,7 +18,8 @@ Rules:
 - Use INTERVAL '1 month' syntax (with quotes) for date arithmetic
 - Use NULLIF(expr, 0) for safe division
 - Use ROUND((expr)::NUMERIC, 2) to round — cast the ENTIRE expression to NUMERIC before ROUND; PostgreSQL ROUND(double precision, int) is not supported
-- GROUP BY must use column expressions, not aliases
+- GROUP BY must use column expressions, not aliases and NEVER aggregate functions
+- For "how many customers meet a condition" use COUNT(*) FROM (SELECT customer_id FROM ... GROUP BY customer_id HAVING ...) sub — never GROUP BY an aggregate
 - Schemas: raw (source), transformed_staging (views), transformed_marts (tables)
 - The ONLY tables that exist are: transformed_marts.daily_sales and transformed_staging.stg_orders
 - NEVER invent table names — do NOT use transformed_marts.orders, transformed_staging.orders, or any other table not listed above
