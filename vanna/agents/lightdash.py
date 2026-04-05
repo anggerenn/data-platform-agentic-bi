@@ -330,6 +330,22 @@ def _get_container_context(client) -> tuple[Optional[str], Optional[str]]:
 
 
 def _get_deploy_image(client) -> Optional[str]:
+    # Explicit override wins (set LIGHTDASH_DEPLOY_IMAGE in Coolify env vars)
+    override = os.environ.get('LIGHTDASH_DEPLOY_IMAGE')
+    if override:
+        return override
+    # Scan all containers (including stopped) for one whose name contains lightdash-deploy
+    for container in client.containers.list(all=True):
+        if 'lightdash-deploy' in container.name:
+            image_ref = container.attrs.get('Config', {}).get('Image', '')
+            if image_ref:
+                return image_ref
+    # Scan image tags
+    for img in client.images.list():
+        for tag in (img.tags or []):
+            if 'lightdash-deploy' in tag:
+                return tag
+    # Fallback to known names
     for name in ['data-platform-lightdash-deploy', 'data-platform_lightdash-deploy']:
         try:
             client.images.get(name)

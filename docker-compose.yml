@@ -226,6 +226,7 @@ services:
       - VANNA_MODEL=${VANNA_MODEL:-deepseek-chat}
       - CHROMA_PATH=/data/vanna-chroma
       - DBT_PATH=/dbt
+      - LIGHTDASH_DEPLOY_IMAGE=${LIGHTDASH_DEPLOY_IMAGE:-}
     volumes:
       - ${VANNA_DATA:-vanna_data}:/data
       - ${CHROMA_CACHE:-chroma_cache_data}:/root/.cache/chroma
