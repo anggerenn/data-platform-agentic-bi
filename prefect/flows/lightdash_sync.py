@@ -18,8 +18,21 @@ import docker
 from prefect import flow, task
 
 
-_NETWORK = 'data-platform_data-network'
+_NETWORK_DEFAULT = os.environ.get('DOCKER_NETWORK', 'data-platform_data-network')
 _REPO_PATH = '/repo'
+
+
+def _detect_network(client):
+    """Return the Docker network this container is connected to."""
+    try:
+        hostname = os.environ.get('HOSTNAME', '')
+        self_container = client.containers.get(hostname)
+        networks = list(self_container.attrs.get('NetworkSettings', {}).get('Networks', {}).keys())
+        if networks:
+            return networks[0]
+    except Exception:
+        pass
+    return _NETWORK_DEFAULT
 
 
 def _find_lightdash_deploy_image(client):
@@ -49,7 +62,8 @@ def download_lightdash_content():
 
     client = docker.from_env()
     image = _find_lightdash_deploy_image(client)
-    print(f"Using lightdash-deploy image: {image}")
+    network = _detect_network(client)
+    print(f"Using image: {image}  network: {network}")
 
     # Find the host path for ./dbt by inspecting this container's mounts
     hostname = os.environ.get('HOSTNAME', '')
@@ -77,7 +91,7 @@ def download_lightdash_content():
             f'"'
         ),
         volumes={host_dbt_path: {'bind': '/dbt', 'mode': 'rw'}},
-        network=_NETWORK,
+        network=network,
         remove=True,
         detach=False,
     )
