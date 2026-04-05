@@ -1,0 +1,36 @@
+# Coolify-specific overrides — never auto-loaded locally.
+# Merged by Coolify via custom start command:
+#   docker compose -f docker-compose.yml -f docker-compose.coolify.yml up -d --remove-orphans
+#
+# exclude_from_hc: prevents Coolify marking the app as "not running"
+# when one-shot init containers (pipeline-init, lightdash-deploy etc.) exit.
+services:
+  postgres:
+    exclude_from_hc: true
+
+  analytics-db:
+    exclude_from_hc: true
+
+  lightdash-db:
+    exclude_from_hc: true
+
+  minio:
+    exclude_from_hc: true
+
+  minio-init:
+    exclude_from_hc: true
+
+  prefect-worker:
+    exclude_from_hc: true
+
+  pipeline-init:
+    exclude_from_hc: true
+
+  lightdash-deploy:
+    exclude_from_hc: true
+
+  vanna:
+    exclude_from_hc: true
+
+  smoke-test:
+    exclude_from_hc: true
