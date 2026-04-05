@@ -17,4 +17,4 @@ COPY vanna/ .
 
 EXPOSE 8084
 
-CMD ["python", "app.py"]
+CMD ["sh", "-c", "rm -rf /data/vanna-chroma/* && python train.py && python app.py"]
