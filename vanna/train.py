@@ -233,6 +233,57 @@ WHERE order_date >= '2026-03-01' AND order_date < '2026-04-01'
 """)
 
 vn.train(
+    question="Show me total unique customers",
+    sql="""
+SELECT
+    COUNT(DISTINCT customer_id) AS total_unique_customers
+FROM transformed_staging.stg_orders
+""")
+
+vn.train(
+    question="Which customers haven't ordered in the last 90 days?",
+    sql="""
+SELECT
+    customer_id,
+    MAX(order_date) AS last_order_date,
+    CURRENT_DATE - MAX(order_date) AS days_since_last_order
+FROM transformed_staging.stg_orders
+GROUP BY customer_id
+HAVING MAX(order_date) < CURRENT_DATE - INTERVAL '90 days'
+ORDER BY days_since_last_order DESC
+""")
+
+vn.train(
+    question="What is the average days between orders per customer?",
+    sql="""
+SELECT
+    customer_id,
+    COUNT(DISTINCT order_date) AS total_order_days,
+    MIN(order_date) AS first_order,
+    MAX(order_date) AS last_order,
+    CASE WHEN COUNT(DISTINCT order_date) > 1
+        THEN (MAX(order_date) - MIN(order_date)) / (COUNT(DISTINCT order_date) - 1)
+        ELSE NULL
+    END AS avg_days_between_orders
+FROM transformed_staging.stg_orders
+GROUP BY customer_id
+ORDER BY avg_days_between_orders DESC NULLS LAST
+""")
+
+vn.train(
+    question="Which customers placed only one order ever?",
+    sql="""
+SELECT
+    customer_id,
+    MIN(order_date) AS order_date,
+    SUM(line_total) AS total_revenue
+FROM transformed_staging.stg_orders
+GROUP BY customer_id
+HAVING COUNT(DISTINCT order_id) = 1
+ORDER BY total_revenue DESC
+""")
+
+vn.train(
     question="How many total units were sold in march 2026?",
     sql="""
 SELECT
