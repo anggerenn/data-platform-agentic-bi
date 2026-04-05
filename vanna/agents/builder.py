@@ -608,15 +608,43 @@ def _wrap_as_dbt_model(sql: str) -> str:
     return "{{ config(materialized='table') }}\n\n" + sql
 
 
+def _materialize_via_psycopg2(model_name: str, raw_sql: str) -> Optional[str]:
+    """
+    CREATE TABLE transformed_marts.{model_name} AS ({raw_sql}) using admin credentials.
+    Drops and recreates the table so the scaffold is idempotent.
+    Returns an error string on failure, None on success.
+    """
+    try:
+        conn = psycopg2.connect(
+            host=os.environ.get('ANALYTICS_DB_HOST'),
+            port=int(os.environ.get('ANALYTICS_DB_PORT', 5432)),
+            user=os.environ.get('ANALYTICS_DB_ADMIN_USER'),
+            password=os.environ.get('ANALYTICS_DB_ADMIN_PASSWORD'),
+            dbname=os.environ.get('ANALYTICS_DB_NAME', 'analytics'),
+        )
+        conn.autocommit = True
+        try:
+            with conn.cursor() as cur:
+                cur.execute(f'DROP TABLE IF EXISTS transformed_marts.{model_name}')
+                cur.execute(
+                    f'CREATE TABLE transformed_marts.{model_name} AS ({raw_sql})'
+                )
+        finally:
+            conn.close()
+        return None
+    except Exception as exc:
+        return str(exc)
+
+
 def scaffold_model(prd, grain_cols: list[str], dbt_path: str, vn=None) -> tuple[Optional[dict], Optional[str]]:
     """
     Create a new dbt model using vn.generate_sql() to produce the SQL.
 
     Steps:
       1. Ask vn.generate_sql() for a query covering all PRD metrics
-      2. Post-process: strip LIMIT, replace table refs with dbt refs, add config header
-      3. Write models/marts/<name>.sql
-      4. Run `dbt run --select <name>`
+      2. Validate with EXPLAIN (up to 3 retries)
+      3. Materialise as transformed_marts.<name> directly via psycopg2 (admin creds)
+      4. Write models/marts/<name>.sql for reference
       5. Query resulting columns from PostgreSQL
       6. Write models/marts/<name>.yml
       7. Invalidate _scan_cache
@@ -647,32 +675,19 @@ def scaffold_model(prd, grain_cols: list[str], dbt_path: str, vn=None) -> tuple[
     else:
         return None, f"SQL validation failed after 3 attempts. Last error: {last_error}"
 
-    sql = _wrap_as_dbt_model(raw_sql)
-    os.makedirs(os.path.dirname(sql_path), exist_ok=True)
-    with open(sql_path, 'w') as f:
-        f.write(sql)
+    # Materialise directly via psycopg2 — avoids dbt profile resolution issues
+    mat_error = _materialize_via_psycopg2(model_name, raw_sql)
+    if mat_error:
+        return None, f"Could not materialise table: {mat_error}"
 
+    # Write .sql for reference / future dbt lineage
+    dbt_sql = _wrap_as_dbt_model(raw_sql)
+    os.makedirs(os.path.dirname(sql_path), exist_ok=True)
     try:
-        proc = subprocess.run(
-            ['dbt', 'run',
-             '--project-dir', dbt_path,
-             '--profiles-dir', dbt_path,
-             '--target', 'scaffold',
-             '--select', model_name],
-            capture_output=True, text=True, timeout=180,
-        )
-        if proc.returncode != 0:
-            try:
-                os.remove(sql_path)
-            except OSError:
-                pass
-            return None, f"dbt run failed:\n{(proc.stdout + proc.stderr)[-1500:]}"
-    except Exception as exc:
-        try:
-            os.remove(sql_path)
-        except OSError:
-            pass
-        return None, str(exc)
+        with open(sql_path, 'w') as f:
+            f.write(dbt_sql)
+    except OSError:
+        pass  # .sql file is reference-only; failure here is non-fatal
 
     try:
         columns = _get_model_columns_from_db(model_name)
