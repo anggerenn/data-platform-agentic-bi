@@ -64,7 +64,9 @@ services:
     restart: unless-stopped
 
   analytics-db:
-    image: postgres:15
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.analytics-db
     environment:
       POSTGRES_USER: ${ANALYTICS_DB_USER:-analytics}
       POSTGRES_PASSWORD: ${ANALYTICS_DB_PASSWORD:-changeme}
@@ -72,7 +74,6 @@ services:
       ANALYTICS_DB_READONLY_PASSWORD: ${ANALYTICS_DB_READONLY_PASSWORD:-changeme_readonly}
     volumes:
       - ${ANALYTICS_DB_DATA:-analytics_db_data}:/var/lib/postgresql/data
-      - ./docker/analytics-db-init:/docker-entrypoint-initdb.d
     networks:
       - data-network
     restart: unless-stopped
