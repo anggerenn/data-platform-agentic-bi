@@ -93,6 +93,21 @@ else
     --ignore-errors \
     --project-dir /dbt \
     --profiles-dir /dbt || echo "WARNING: lightdash deploy failed"
+
+  # After creation, fetch the new project UUID and select it so upload works
+  PROJECT_UUID=$(curl -s -H "Authorization: ApiKey ${LIGHTDASH_API_KEY}" \
+    "${LIGHTDASH_URL}/api/v1/org/projects" \
+    | python3 -c "
+import sys, json
+projects = json.load(sys.stdin).get('results', [])
+real = [p for p in projects if not p.get('type','').startswith('preview')]
+print(real[0]['projectUuid'] if real else '')
+" 2>/dev/null || echo "")
+
+  if [ -n "$PROJECT_UUID" ]; then
+    echo "    Project created: $PROJECT_UUID"
+    lightdash config set-project --uuid "$PROJECT_UUID"
+  fi
 fi
 
 # Upload dashboard YAML files (content-as-code)
