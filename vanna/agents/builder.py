@@ -577,7 +577,7 @@ def _source_table_for_sql(sql: str) -> str:
     return 'daily_sales'
 
 
-_BARE_REF_RE = re.compile(r'\b(stg_\w+|raw_\w+)\b')
+_BARE_REF_RE = re.compile(r"(?<!')\b(stg_\w+|raw_\w+)\b(?!')")
 
 
 def _wrap_as_dbt_model(sql: str, model_name: str = '') -> str:
