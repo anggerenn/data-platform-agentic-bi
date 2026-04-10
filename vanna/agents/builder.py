@@ -119,9 +119,6 @@ def _scan_models(dbt_path: str) -> list[dict]:
 
 # ── Grain inference ────────────────────────────────────────────────────────────
 
-_DIRECT_GRAIN_COLS = {'customer_id', 'city', 'category', 'order_date', 'order_id'}
-
-
 def _infer_grain_from_prd(prd) -> list[str]:
     """
     Parse PRD metrics and dimensions to determine the minimum required grain.
@@ -134,12 +131,6 @@ def _infer_grain_from_prd(prd) -> list[str]:
     words = set(re.findall(r'\w+', all_text.lower()))
     for word, col in _GRAIN_SIGNALS.items():
         if word in words:
-            grain.add(col)
-    # Directly include dimension values that name grain columns — e.g. 'customer_id'
-    # won't match the keyword 'customer' via re.findall since underscore joins the tokens.
-    for dim in getattr(prd, 'dimensions', []):
-        col = dim.lower().strip()
-        if col in _DIRECT_GRAIN_COLS:
             grain.add(col)
     return sorted(grain)
 
@@ -735,6 +726,20 @@ async def run_data_modeler(prd, dbt_path: str) -> DataModelResult:
     Returns needs_new_model=True + required_grain when no model covers the PRD.
     """
     required_grain = _infer_grain_from_prd(prd)
+
+    # Augment grain from PRD dimensions using actual schema columns — no hardcoded list.
+    # If the user named a dimension that is a physical column in any model (e.g. 'customer_id'),
+    # include it directly. This handles compound names like 'customer_id' that re.findall
+    # tokenises as one word and never matches the keyword 'customer' in _GRAIN_SIGNALS.
+    models = _scan_models(dbt_path)
+    all_cols = {c.lower() for m in models for c in m['columns']}
+    grain_set = set(required_grain)
+    for dim in getattr(prd, 'dimensions', []):
+        col = dim.lower().strip()
+        if col in all_cols:
+            grain_set.add(col)
+    required_grain = sorted(grain_set)
+
     best = find_best_model(dbt_path, required_grain=required_grain, metrics=prd.metrics)
 
     if best:
