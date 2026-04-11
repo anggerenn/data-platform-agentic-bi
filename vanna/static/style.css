@@ -314,9 +314,12 @@ body {
 #dpm-send-btn:disabled { opacity: 0.45; cursor: default; }
 
 /* ── Embedded mode (inside Lightdash widget panel) ────── */
+/* Do NOT override `height` here — base `body { height: 100vh }` must remain
+ * in effect. Setting `height:100%` collapses body to 0 because <html> has no
+ * explicit height, which then collapses #widget → #chat-panel → #messages
+ * (the messages flex:1 child becomes 0px tall). */
 body.embedded {
   background: #fff;
-  height: 100%;
   overflow: hidden;
 }
 body.embedded #widget {
