@@ -269,6 +269,7 @@ services:
       start_period: 15s
     networks:
       - data-network
+      - coolify
     restart: unless-stopped
 
 volumes:
@@ -281,5 +282,7 @@ volumes:
   chroma_cache_data:
 
 networks:
+  coolify:
+    external: true
   data-network:
     driver: bridge
