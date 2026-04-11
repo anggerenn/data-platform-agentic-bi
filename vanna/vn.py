@@ -65,6 +65,35 @@ class VannaAI(ChromaDB_VectorStore, OpenAI_Chat):
         ]
         return pd.DataFrame(clean_rows, columns=columns)
 
+    def validate_sql(self, sql: str) -> tuple[bool, str]:
+        """Run EXPLAIN to check SQL validity without fetching data."""
+        try:
+            with self._get_conn().cursor() as cur:
+                cur.execute(f"EXPLAIN {sql}")
+            return True, ""
+        except Exception as e:
+            return False, str(e)
+
+    def generate_sql_with_retry(self, question: str, max_attempts: int = 3) -> str:
+        """Generate SQL, validate with EXPLAIN, retry with error context on failure."""
+        prompt = question
+        last_error = ""
+        for attempt in range(max_attempts):
+            sql = self.generate_sql(prompt)
+            ok, error = self.validate_sql(sql)
+            if ok:
+                return sql
+            last_error = error
+            print(f"[vanna] SQL attempt {attempt + 1} failed: {error}")
+            if attempt < max_attempts - 1:
+                prompt = (
+                    f"{question}\n\n"
+                    f"Previous SQL attempt failed with error: {error}\n"
+                    f"SQL was:\n{sql}\n"
+                    f"Generate a corrected SQL query."
+                )
+        raise ValueError(f"SQL generation failed after {max_attempts} attempts. Last error: {last_error}")
+
 
 def get_vanna() -> VannaAI:
     client = OpenAIClient(

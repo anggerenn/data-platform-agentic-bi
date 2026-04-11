@@ -53,7 +53,7 @@ async def explore_data(ctx: RunContext[AgentDeps], question: str) -> dict:
     if cache_key in ctx.deps.sql_cache:
         sql = ctx.deps.sql_cache[cache_key]
     else:
-        sql = ctx.deps.vanna.generate_sql(question)
+        sql = ctx.deps.vanna.generate_sql_with_retry(question)
         ctx.deps.sql_cache[cache_key] = sql
     df = ctx.deps.vanna.run_sql(sql)
     rows = df.head(20).to_dict(orient='records')
