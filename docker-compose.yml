@@ -221,7 +221,6 @@ services:
       - LIGHTDASH_EMAIL=${LIGHTDASH_EMAIL}
       - LIGHTDASH_PASSWORD=${LIGHTDASH_PASSWORD}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
       - VANNA_MODEL=${VANNA_MODEL:-deepseek-chat}
       - CHROMA_PATH=/data/vanna-chroma
       - DBT_PATH=/dbt
