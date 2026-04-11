@@ -30,18 +30,20 @@
       'background:#fff;',
       'box-shadow:-4px 0 32px rgba(0,0,0,.18);',
       'z-index:2147483645;',
-      'display:flex;flex-direction:column;',
+      'overflow:hidden;',
       'transform:translateX(100%);',
       'transition:transform ' + EASE + ';',
     '}',
     '#vanna-panel.open{transform:translateX(0);}',
 
     '#vanna-panel-header{',
+      'position:absolute;top:0;left:0;right:0;',
+      'height:52px;box-sizing:border-box;',
       'background:#7262ff;color:#fff;',
       'padding:14px 16px;',
       'display:flex;align-items:center;justify-content:space-between;',
       'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;',
-      'font-size:14px;font-weight:600;flex-shrink:0;',
+      'font-size:14px;font-weight:600;',
     '}',
     '#vanna-panel-header button{',
       'background:none;border:none;color:#fff;',
@@ -50,7 +52,10 @@
     '}',
     '#vanna-panel-header button:hover{opacity:1;background:rgba(255,255,255,.15);}',
 
-    '#vanna-panel iframe{flex:1;border:none;width:100%;}'
+    '#vanna-panel iframe{',
+      'position:absolute;top:52px;left:0;right:0;bottom:0;',
+      'border:none;width:100%;height:auto;',
+    '}'
   ].join('');
   document.head.appendChild(style);
 

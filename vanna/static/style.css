@@ -316,16 +316,22 @@ body {
 /* ── Embedded mode (inside Lightdash widget panel) ────── */
 body.embedded {
   background: #fff;
+  height: 100%;
+  overflow: hidden;
 }
 body.embedded #widget {
-  position: static;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
   width: 100%;
-  height: 100vh;
+  height: 100%;
+  align-items: stretch;
 }
 body.embedded #chat-panel {
   display: flex !important;
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
   width: 100%;
-  height: 100vh;
+  height: 100%;
   border-radius: 0;
   margin-bottom: 0;
   box-shadow: none;
