@@ -24,6 +24,40 @@ class AgentDeps:
     result_rows: list = field(default_factory=list)
     result_columns: list = field(default_factory=list)
     result_total_count: int = 0
+    # Computed summary stats — passed to answer_semantic, never raw rows
+    result_summary: str = ""
+
+
+def _summarise_rows(rows: list[dict], columns: list[str]) -> str:
+    """Compute lightweight summary stats for semantic reasoning.
+
+    Returns column-level stats (numeric: min/max/avg; categorical: distinct values).
+    Raw rows never leave this function — only aggregates are returned.
+    """
+    if not rows or not columns:
+        return ""
+
+    total = len(rows)
+    lines = [f"Result: {total} row(s), columns: {', '.join(columns)}"]
+
+    for col in columns:
+        values = [r[col] for r in rows if r.get(col) is not None]
+        if not values:
+            continue
+        if all(isinstance(v, (int, float)) for v in values):
+            mn, mx, avg = min(values), max(values), sum(values) / len(values)
+            lines.append(f"  {col}: min={mn:.4g}, max={mx:.4g}, avg={avg:.4g}")
+        else:
+            distinct = list(dict.fromkeys(str(v) for v in values))
+            if len(distinct) <= 8:
+                lines.append(f"  {col}: {', '.join(distinct)}")
+            else:
+                lines.append(
+                    f"  {col}: {len(distinct)} distinct values"
+                    f" (sample: {', '.join(distinct[:3])}…)"
+                )
+
+    return "\n".join(lines)
 
 
 agent = Agent(
@@ -61,16 +95,25 @@ async def explore_data(ctx: RunContext[AgentDeps], question: str) -> dict:
     ctx.deps.result_rows = rows
     ctx.deps.result_columns = list(df.columns)
     ctx.deps.result_total_count = len(df)
+    ctx.deps.result_summary = _summarise_rows(rows, list(df.columns))
     return {"sql": sql, "row_count": len(df), "columns": list(df.columns)}
 
 
 @agent.tool
 async def answer_semantic(ctx: RunContext[AgentDeps], question: str) -> str:
-    """Answer a definitional or conceptual question using schema documentation."""
+    """Answer a conceptual question or summarise previous results using schema docs + data stats."""
+    parts = []
+
     docs = ctx.deps.vanna.get_related_documentation(question)
     if docs:
-        return "Schema context:\n" + "\n".join(docs[:5])
-    return "No schema documentation found. Answer from general knowledge."
+        parts.append("Schema context:\n" + "\n".join(docs[:5]))
+
+    if ctx.deps.result_summary:
+        parts.append("Previous query result statistics:\n" + ctx.deps.result_summary)
+
+    if not parts:
+        return "No schema documentation or result data available. Answer from general knowledge."
+    return "\n\n".join(parts)
 
 
 @agent.tool
