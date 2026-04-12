@@ -7,8 +7,6 @@ services:
       POSTGRES_DB: prefect
     volumes:
       - ${PREFECT_DB_DATA:-prefect_db_data}:/var/lib/postgresql/data
-    networks:
-      - data-network
     restart: unless-stopped
 
   prefect-server:
@@ -29,8 +27,6 @@ services:
     command: prefect server start
     expose:
       - "4200"
-    networks:
-      - data-network
     restart: unless-stopped
 
   prefect-worker:
@@ -59,8 +55,6 @@ services:
       - ./dbt:/opt/prefect/dbt
       - .:/repo
       - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - data-network
     restart: unless-stopped
 
   analytics-db:
@@ -72,8 +66,6 @@ services:
       ANALYTICS_DB_READONLY_PASSWORD: ${ANALYTICS_DB_READONLY_PASSWORD:-changeme_readonly}
     volumes:
       - ${ANALYTICS_DB_DATA:-analytics_db_data}:/var/lib/postgresql/data
-    networks:
-      - data-network
     restart: unless-stopped
 
   minio:
@@ -84,8 +76,6 @@ services:
     volumes:
       - ${MINIO_DATA:-minio_data}:/data
     command: server /data --console-address ":9001"
-    networks:
-      - data-network
     restart: unless-stopped
 
   minio-init:
@@ -98,8 +88,6 @@ services:
         mc alias set local http://minio:9000 $${MINIO_ROOT_USER:-minioadmin} $${MINIO_ROOT_PASSWORD:-minioadmin} &&
         mc mb --ignore-existing local/lightdash
       "
-    networks:
-      - data-network
     restart: "no"
 
   lightdash-db:
@@ -110,8 +98,6 @@ services:
       POSTGRES_DB: lightdash
     volumes:
       - ${LIGHTDASH_DB_DATA:-lightdash_db_data}:/var/lib/postgresql/data
-    networks:
-      - data-network
     restart: unless-stopped
 
   lightdash:
@@ -140,8 +126,6 @@ services:
       - NODE_OPTIONS=--max-old-space-size=640
     volumes:
       - ./dbt:/usr/app/dbt
-    networks:
-      - data-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080/api/v1/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
@@ -172,8 +156,6 @@ services:
     volumes:
       - ${PIPELINES_DATA:-pipelines_data}:/data
     command: sh -c "python /opt/prefect/prefect/flows/main_pipeline.py || echo 'pipeline-init failed — check logs above'; exit 0"
-    networks:
-      - data-network
     restart: "no"
 
   # One-time first-boot: registers Lightdash admin user, creates PAT, deploys dbt models.
@@ -199,8 +181,6 @@ services:
       - LIGHTDASH_PASSWORD=${LIGHTDASH_PASSWORD}
       - LIGHTDASH_API_KEY=${LIGHTDASH_API_KEY}
       - CI=true
-    networks:
-      - data-network
     restart: "no"
 
   vanna:
@@ -231,8 +211,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     expose:
       - "8084"
-    networks:
-      - data-network
     restart: unless-stopped
 
   # Runs smoke test after pipeline + lightdash-deploy complete
@@ -248,8 +226,6 @@ services:
       vanna:
         condition: service_started
     command: python /app/smoke_test.py --url http://vanna:8084
-    networks:
-      - data-network
     restart: "no"
 
   nginx:
@@ -267,8 +243,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
-    networks:
-      - data-network
     restart: unless-stopped
 
 volumes:
@@ -279,7 +253,3 @@ volumes:
   pipelines_data:
   vanna_data:
   chroma_cache_data:
-
-networks:
-  data-network:
-    driver: bridge
