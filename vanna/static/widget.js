@@ -140,7 +140,7 @@
     panel.classList.add('open');
     shiftFixed(true);
     shiftMain(true);
-    fab.style.display = 'none';
+    fab.style.setProperty('display', 'none', 'important');
   }
 
   function closePanel() {
