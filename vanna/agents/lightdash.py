@@ -74,6 +74,42 @@ def _metric_keywords(metrics: list[str]) -> set:
     return words - _FILLER
 
 
+def _build_metric_map(model_name: str, dbt_path: str = '/dbt') -> dict[str, str]:
+    """Read the model's schema YAML and return {column_name: full_lightdash_field_id}.
+
+    E.g. for model 'churn' with column 'total_customers' having metric key
+    'total_customers_count_distinct', returns:
+        {'total_customers': 'churn_total_customers_count_distinct'}
+
+    Falls back to '{model}_{col}_sum' when the YAML is missing or unparseable.
+    """
+    metric_map: dict[str, str] = {}
+    schema_path = os.path.join(dbt_path, 'models', 'marts', f'{model_name}.yml')
+    if not os.path.exists(schema_path):
+        # Try the shared schema.yml
+        schema_path = os.path.join(dbt_path, 'models', 'marts', 'schema.yml')
+    if not os.path.exists(schema_path):
+        return metric_map
+    try:
+        with open(schema_path) as f:
+            data = yaml.safe_load(f)
+        if not data or 'models' not in data:
+            return metric_map
+        for m in data['models']:
+            if m['name'] != model_name:
+                continue
+            for col in m.get('columns', []):
+                col_name = col['name']
+                metrics_def = col.get('meta', {}).get('metrics', {})
+                if metrics_def:
+                    # Use the first metric key defined for this column
+                    metric_key = next(iter(metrics_def))
+                    metric_map[col_name] = f"{model_name}_{metric_key}"
+    except Exception:
+        pass
+    return metric_map
+
+
 # ── Chart planning ─────────────────────────────────────────────────────────────
 
 def _plan_charts(model_name: str, columns: list[str], metrics: list[str], dimensions: list[str] | None = None) -> list[dict]:
@@ -83,7 +119,9 @@ def _plan_charts(model_name: str, columns: list[str], metrics: list[str], dimens
     if dimensions:
         kw |= _metric_keywords(dimensions)
     dim = lambda col: f"{model_name}_{col}"      # dimension field ID
-    met = lambda col: f"{model_name}_{col}_sum"  # metric field ID (matches schema meta.metrics)
+    # Read actual metric keys from schema YAML instead of hardcoding _sum
+    _metric_map = _build_metric_map(model_name)
+    met = lambda col: _metric_map.get(col, f"{model_name}_{col}_sum")
 
     # Prefer total_revenue > revenue > other numeric columns
     primary = None
