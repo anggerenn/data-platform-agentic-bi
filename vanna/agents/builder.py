@@ -249,6 +249,7 @@ _NUM_COL_RE = re.compile(
 _ID_COL_RE = re.compile(r'_id$', re.I)  # only true entity ID columns get count_distinct metric
 _PLAIN_COL_RE = re.compile(r'^[\w]+$')  # plain col ref (no function calls) — e.g. "col" or "a.col"
 _RANK_COL_RE = re.compile(r'(_rank|_leaderboard_rank)$', re.I)
+_DATE_COL_RE = re.compile(r'(date|_date|month|week|year|period|_at|_time)$|^(date|month|week|year)', re.I)
 
 
 def _model_name_from_prd(prd) -> str:
@@ -337,14 +338,17 @@ def _parse_select_term(term: str, out: dict[str, str]) -> None:
 
 def _infer_metric_type(expr: str) -> Optional[str]:
     """
-    Return the Lightdash metric type for a SQL expression, or None if it's a dimension.
-      SUM(...)             → 'sum'
-      COUNT(DISTINCT ...)  → 'count_distinct'
-      COUNT(...)           → 'count'
+    Return the Lightdash metric type for a materialised column's SQL expression.
+
+    After dbt materialises the model, the column holds the pre-computed result.
+    Lightdash metrics define how to RE-aggregate that column across groups, so:
+      SUM(...)             → 'sum'   (additive)
+      COUNT(DISTINCT ...)  → 'sum'   (pre-aggregated counts are additive)
+      COUNT(...)           → 'sum'   (pre-aggregated counts are additive)
       AVG(...)/AVERAGE(...)→ 'average'
       MIN(...)             → 'min'
       MAX(...)             → 'max'
-      expression with multiple agg calls → 'number'
+      expression with multiple agg calls → 'number' (ratio/derived)
       CASE / window / plain column → None (dimension)
     """
     expr_up = expr.upper().strip()
@@ -364,9 +368,8 @@ def _infer_metric_type(expr: str) -> Optional[str]:
     if fn == 'SUM':
         return 'sum'
     if fn == 'COUNT':
-        if re.search(r'\bCOUNT\s*\(\s*DISTINCT\b', expr_up):
-            return 'count_distinct'
-        return 'count'
+        # Pre-aggregated counts are additive integers — re-aggregate with sum
+        return 'sum'
     if fn in ('AVG', 'AVERAGE'):
         return 'average'
     if fn == 'MIN':
@@ -462,7 +465,7 @@ def _write_schema_file(
             # SQL parsing ran on a real expression and returned None → confirmed dimension (e.g. CASE)
             # If the column name also looks numeric (e.g. churned_customer_count = CASE...0/1),
             # expose a sum metric too so chart planners can reference it.
-            dim_type = 'date' if col.endswith('_date') else ('number' if _NUM_COL_RE.search(col) else 'string')
+            dim_type = 'date' if _DATE_COL_RE.search(col) else ('number' if _NUM_COL_RE.search(col) else 'string')
             meta: dict = {
                 'dimension': {
                     'type': dim_type,
@@ -508,7 +511,7 @@ def _write_schema_file(
                     }
                 }
             else:
-                dim_type = 'date' if col.endswith('_date') else 'string'
+                dim_type = 'date' if _DATE_COL_RE.search(col) else 'string'
                 entry['meta'] = {
                     'dimension': {
                         'type': dim_type,

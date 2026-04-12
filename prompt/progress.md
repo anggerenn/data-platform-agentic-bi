@@ -1,5 +1,89 @@
 # Project Progress
 
+## Session 18 — Scaffolded Dashboard Metric Mismatch Fix (2026-04-12)
+
+### Context
+Churn dashboard created by the dashboard builder showed "unknown field" errors for all charts. After fixing field IDs, charts showed "No data available" despite the underlying table having data.
+
+### Root cause 1 — `lightdash.py` hardcoded `_sum` metric suffix
+`_plan_charts()` used `met = lambda col: f"{model_name}_{col}_sum"` for all metric field IDs. But `builder.py`'s `_write_schema_file()` correctly infers metric types from SQL — e.g. `COUNT(DISTINCT customer_id)` → metric key `total_customers_count_distinct`. Chart YAMLs referenced `_sum`, schema defined `_count_distinct` → Lightdash said "unknown field".
+
+### Fix 1 — `_build_metric_map()` in `lightdash.py`
+Added helper that reads the model's schema YAML and returns `{column_name: full_lightdash_field_id}`. `_plan_charts()` now uses this map instead of hardcoding `_sum`. Falls back to `_sum` when YAML is missing (backward compatible for `daily_sales`).
+
+### Root cause 2 — Wrong Lightdash metric types for materialised columns
+`_infer_metric_type()` in `builder.py` detected SQL aggregation types correctly (e.g. `COUNT(DISTINCT ...)` → `count_distinct`), but after `dbt run` materialises the table, the column is a plain integer. Lightdash applying `count_distinct` on an integer column counts distinct integer values (0,1,2,3,4,5 → 6) instead of summing them (2+3+5+... = 98).
+
+### Fix 2 — `_infer_metric_type()` maps to re-aggregation types
+- SQL `COUNT` / `COUNT(DISTINCT)` → Lightdash `sum` (pre-aggregated counts are additive)
+- SQL ratio (multiple agg calls) → Lightdash `number` with weighted avg, or `average` fallback
+- Added `_DATE_COL_RE` regex for better date column detection (`month_start`, `order_month`, etc.) — previously only matched `_date` suffix
+
+### Root cause 3 — `lightdash upload` skips existing charts
+After fixing chart YAML files on disk, `lightdash upload` logged "Total charts skipped: 20" — it doesn't update charts that already exist by slug. Had to delete old charts via Lightdash API, then re-upload.
+
+### Lesson learned
+`lightdash upload` is create-only for charts — it won't update existing ones. To fix chart definitions, either delete via API first or use the Lightdash UI.
+
+### Commits
+- `fix(lightdash): resolve metric field IDs from schema YAML instead of hardcoding _sum`
+
+---
+
+## Session 17 — Traefik 504 Gateway Timeout Fix (2026-04-12)
+
+### Context
+Fresh Coolify deploy (deleted and recreated service). Lightdash returned 504 Gateway Timeout despite all containers being healthy.
+
+### Root cause — Traefik picks wrong Docker network
+- nginx was on two networks: `data-network` (from docker-compose.yml) and `szr5me99lqxbqleraza4mdt2` (added by Coolify)
+- Traefik (coolify-proxy) was only connected to the Coolify project network (`szr5me99lqxbqleraza4mdt2`)
+- Without a `traefik.docker.network` label, Traefik v3 non-deterministically picks which network to route through — when it picked `data-network`, it couldn't reach nginx → 504
+- This worked in previous sessions by luck (Traefik happened to pick the right network)
+
+### Fix — Remove custom `data-network` entirely
+- Removed `networks: [data-network]` from all 13 services in `docker-compose.yml`
+- Removed the `networks: data-network: driver: bridge` block
+- Docker Compose auto-creates a default network for all services (works locally)
+- On Coolify, all services land on the single Coolify project network — no ambiguity for Traefik
+- Confirmed fix: `https://lightdash.baroqafarm.com/` returns 200 after redeploy
+
+### Research
+- [Coolify docs](https://coolify.io/docs/troubleshoot/applications/gateway-timeout) confirms: custom networks cause Traefik routing ambiguity
+- [Traefik community](https://community.traefik.io/t/app-with-multiple-networks-sometimes-fails-with-gateway-timeout/19167) confirms: known non-deterministic behavior with multi-network containers
+- Best practice: either remove extra networks or always set `traefik.docker.network` label
+
+### Commit
+- `fix(compose): remove custom data-network to prevent Traefik 504`
+
+---
+
+## Session 16 — Chat Widget Height Fix + VPS Fresh Deploy (2026-04-11)
+
+### Context
+Widget rendering broken on `lightdash.baroqafarm.com` — panel appeared as a tiny box. Multiple fixes attempted. Fresh VPS redeploy triggered multiple times due to stale env vars and volume issues.
+
+### Fix 1 — nginx stale DNS after redeploy (`nginx/lightdash.conf`)
+- Added `resolver 127.0.0.11 valid=10s` + variable-based `proxy_pass` (`set $vanna` / `set $lightdash`) so nginx re-resolves Docker DNS every 10s without a manual restart.
+- Added `listen [::]:80` to fix Alpine wget IPv6 healthcheck failure.
+
+### Fix 2 — Widget panel height (partial — `vanna/static/widget.js`, `style.css`)
+- **Root cause attempt 1:** `#vanna-panel iframe` used `flex:1` — iframes have intrinsic sizes that override flex-grow in some browsers. Changed to `position:absolute; top:52px; left:0; right:0; bottom:0`.
+- **Root cause attempt 2:** Embedded mode CSS (`body.embedded`) not applying reliably. Switched to inline styles in `index.html` JS block to force `#chat-panel` height.
+- **Root cause attempt 3:** Lightdash global CSS overriding `position:fixed` on `#vanna-panel`. Added `!important` to all panel CSS + explicit `height:100vh`.
+- **Status:** Widget still renders as tiny box on `lightdash.baroqafarm.com` despite working at `vanna.baroqafarm.com` directly. Needs DevTools inspection on the nginx-proxied page to identify the winning CSS rule.
+
+### VPS ops — Traefik routing delay on fresh deploy
+- After fresh Coolify deploy with new UUID (`f14e63...`), `lightdash.baroqafarm.com` returned gateway timeout.
+- **Root cause (corrected in session 17):** Was misdiagnosed as Traefik discovery interval. Actual cause was multi-network ambiguity — nginx on both `data-network` and Coolify project network, Traefik picking the wrong one. Fixed by removing `data-network` entirely.
+
+### VPS ops — repeated fresh deploys
+- Multiple volume wipe + redeploy cycles due to stale `LIGHTDASH_API_KEY` in Coolify env vars blocking lightdash-deploy.
+- Resolution: user manually cleared the key in Coolify UI before each fresh deploy.
+- lightdash-deploy confirmed working (ExitCode 0, dashboards uploaded).
+
+---
+
 ## Session 15 — Model Selection Refactor + VPS Testing (2026-04-10)
 
 ### Context

@@ -185,6 +185,11 @@ Replace with BM25 (rank-bm25) — no embedding model needed, ~60MB target.
 - [x] Mount `/var/run/docker.sock` in Vanna container via Coolify volume config
 - [x] Smoke test all services on VPS URLs
 
+### Session 18 scaffolded dashboard metric fix
+- [x] `lightdash.py` — added `_build_metric_map()` to resolve metric field IDs from schema YAML instead of hardcoding `_sum`
+- [x] `builder.py` — `_infer_metric_type()` maps SQL `COUNT`/`COUNT(DISTINCT)` → Lightdash `sum` (pre-aggregated counts are additive); added `_DATE_COL_RE` for date column detection (`month_start`, `order_month`, etc.)
+- [x] Fixed churn dashboard on VPS: corrected schema YAML metric types, deleted stale charts via API, re-uploaded
+
 ### Session 14 production fixes applied
 - [x] `profiles.yml` directory corruption fixed — removed separate bind mount from `_trigger_deploy`, added defensive CMD in `Dockerfile.vanna`
 - [x] `_wrap_as_dbt_model` handles 3-part qualified table refs (schema.transformed_*.)
@@ -221,10 +226,7 @@ Replace with BM25 (rank-bm25) — no embedding model needed, ~60MB target.
 - [ ] Add Lightdash YAML validation to `.github/workflows/validate-schema.yml` so bad YAMLs are caught on PR before they reach `lightdash upload`
 
 ### SQL validation + correction loop (gap vs Wren AI)
-- [ ] Currently `explore_data` executes SQL directly — if DeepSeek generates bad SQL it just errors with no retry
-- [ ] Add a dry-run validation step before execution: run `EXPLAIN` (or execute with `LIMIT 0`) to catch syntax/schema errors without fetching data
-- [ ] On validation failure, retry SQL generation with the error message as additional context — up to 3 attempts (same pattern as Wren's `SqlCorrectionPipeline`)
-- [ ] Implementation: in `router.py` `explore_data` tool — wrap `vn.run_sql()` with a validate-then-execute pattern; pass error back to `vn.generate_sql()` on retry with a correction prompt
+- [x] `validate_sql()` + `generate_sql_with_retry()` added to `VannaAI` — EXPLAIN before execute, up to 3 retries with error context injected into prompt; `explore_data` uses retry method; SQL only cached after passing EXPLAIN
 
 ### MDL-style metric injection into Vanna training (Wren-inspired)
 `meta.metrics` is defined in `schema.yml` and `train_from_schema.py` generates Q&A pairs from it, but the training docs don't explicitly tell the LLM *which expression to use and from which table* — so it still picks between `revenue`, `amount`, `line_total` arbitrarily.
@@ -320,12 +322,11 @@ Root cause of wrong queries: LLM picks between `revenue`, `amount`, `line_total`
 - [x] ~~Replace ChromaDB with BM25~~ — reverted; BM25 lacks generalization, ChromaDB/ONNX retained
 
 ### Chat UX — date context awareness
-- [ ] Agent doesn't understand follow-up questions about data period (e.g. "is it overall period?", "filter only march") — lacks awareness of what date range the previous query covered
-- [ ] Every explore result should surface the date range it covers (e.g. "Data from 2026-01-01 to 2026-03-08") so users know what they're looking at without asking
+- [x] `_detect_date_range()` finds date column, returns min/max + distinct period count; surfaced in API response + frontend "Data from X → Y" label; prepended to `result_summary` so `answer_semantic` knows the period
+- [ ] Follow-up filter questions ("filter only march") — SQL generation has no context of previous query; deferred
 
 ### Chat UX — key takeaways quality
-- [ ] `answer_semantic` LLM doesn't reason about data constraints (e.g. 100% multi-city customers → no comparison is possible)
-- [ ] Options: pass summary statistics (counts, min/max of key columns) as context when routing to `answer_semantic`; or upgrade to a stronger model for semantic answers
+- [x] `_summarise_rows()` computes per-column stats (numeric: min/max/avg; categorical: distinct values); injected into `answer_semantic` context alongside schema docs so LLM reasons about actual data constraints
 
 ### Housekeeper — add structural comparison layer
 - [x] Field-level: chart YAML field IDs merged into Jaccard fingerprint per dashboard
@@ -349,6 +350,8 @@ Root cause of wrong queries: LLM picks between `revenue`, `amount`, `line_total`
 ### VPS operational notes
 - [x] `vanna.baroqafarm.com` domain configured in Coolify
 - [x] **nginx stale state after full redeploy** — added `resolver 127.0.0.11 valid=10s` + variable-based `proxy_pass` in `nginx/lightdash.conf` so nginx re-resolves Docker DNS every 10s; added health check to nginx service in `docker-compose.yml`
+- [x] **Traefik 504 Gateway Timeout on fresh deploy** — removed custom `data-network` from `docker-compose.yml`; Coolify's project network is sufficient; eliminates multi-network ambiguity that caused Traefik to non-deterministically pick unreachable network
+- [ ] **Chat widget renders as tiny box on lightdash.baroqafarm.com** — when nginx injects `widget.js` into Lightdash, the `#vanna-panel` collapses. Root cause: Lightdash CSS overrides `position:fixed; top:0; bottom:0` on the panel. Multiple CSS fixes attempted (`!important`, absolute iframe positioning, embedded mode inline styles) but widget still renders wrong in the nginx-proxied context despite working correctly at `vanna.baroqafarm.com` directly. Needs proper investigation (browser DevTools inspect on `lightdash.baroqafarm.com`).
 
 ### Instructor — update README when dashboard is enriched with new narrative
 - [x] merge_guides() merges existing + new PRD; update_readme_tile() updates YAML + redeploys; wired in app.py on partial_uncovered
