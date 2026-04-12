@@ -184,7 +184,7 @@ def chat_stream():
             elif item[0] == 'output':
                 _, result_data, new_msgs = item
                 sessions[session_id] = sessions.get(session_id, []) + new_msgs
-                yield f"data: {json.dumps({'type': 'result', **result_data})}\n\n"
+                yield f"data: {json.dumps({'type': 'result', **result_data}, default=str)}\n\n"
                 break
             elif item[0] == 'error':
                 yield f"data: {json.dumps({'type': 'error', 'message': item[1], 'session_id': session_id})}\n\n"
